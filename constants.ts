@@ -15,9 +15,51 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 // Google Apps Script Code
-// 此腳本支援新增、讀取以及刪除交易紀錄。
+// 此腳本支援交易紀錄管理與 Yahoo 股市新聞抓取
 
 function doGet(e) {
+  var action = e.parameter.action;
+  
+  // --- 處理新聞抓取 (Yahoo Finance via Google RSS Proxy) ---
+  if (action === "GET_NEWS") {
+    var symbol = e.parameter.symbol;
+    if (!symbol) return createJsonOutput({error: "Missing symbol"});
+    
+    try {
+      // 使用 site: 指令限制來源為 Yahoo 股市
+      var query = "site:tw.stock.yahoo.com " + symbol;
+      var url = "https://news.google.com/rss/search?q=" + encodeURIComponent(query) + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
+      var response = UrlFetchApp.fetch(url);
+      var xml = response.getContentText();
+      var document = XmlService.parse(xml);
+      var root = document.getRootElement();
+      var channel = root.getChild('channel');
+      var items = channel.getChildren('item');
+      
+      var news = [];
+      for (var i = 0; i < Math.min(items.length, 3); i++) {
+        var item = items[i];
+        var fullTitle = item.getChildText('title');
+        // 分離標題與來源 (Google News 通常格式為 "標題 - 來源")
+        var titleParts = fullTitle.split(" - ");
+        var source = "Yahoo 股市"; // 強制標示為 Yahoo
+        var title = titleParts.join(" - ");
+        
+        news.push({
+          title: title,
+          url: item.getChildText('link'),
+          source: source,
+          date: item.getChildText('pubDate'),
+          snippet: "點擊查看 Yahoo 股市即時分析內容..."
+        });
+      }
+      return createJsonOutput(news);
+    } catch (err) {
+      return createJsonOutput({error: err.toString()});
+    }
+  }
+
+  // --- 預設獲取交易與價格資料 ---
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var txSheet = ss.getSheetByName("Transactions");
   var priceSheet = ss.getSheetByName("Prices");
@@ -27,7 +69,7 @@ function doGet(e) {
     var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
     txData = rows.map(function(r) {
       return {
-        id: String(r[0]), // 強制轉為字串
+        id: String(r[0]),
         date: r[1], 
         type: r[2], 
         stockSymbol: String(r[3]), 
@@ -56,10 +98,10 @@ function doGet(e) {
     }
   }
 
-  return ContentService.createTextOutput(JSON.stringify({
+  return createJsonOutput({
     transactions: txData,
     quotes: quotes
-  })).setMimeType(ContentService.MimeType.JSON);
+  });
 }
 
 function doPost(e) {
@@ -70,63 +112,46 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     
-    // --- 處理刪除邏輯 ---
     if (data.action === "DELETE") {
       if (txSheet) {
         var idToDelete = String(data.id).trim();
         var rows = txSheet.getDataRange().getValues();
         for (var i = 1; i < rows.length; i++) {
-          // 強制將工作表中的 ID 也轉為字串並去空白進行比對
           if (String(rows[i][0]).trim() === idToDelete) {
             txSheet.deleteRow(i + 1);
-            return ContentService.createTextOutput(JSON.stringify({status: "success", deletedId: idToDelete}))
-              .setMimeType(ContentService.MimeType.JSON);
+            return createJsonOutput({status: "success", deletedId: idToDelete});
           }
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "找不到該交易 ID: " + data.id}))
-        .setMimeType(ContentService.MimeType.JSON);
+      return createJsonOutput({status: "error", message: "ID not found"});
     }
 
-    // --- 處理新增邏輯 ---
     var cleanSymbol = String(data.stockSymbol).trim();
-    
     if (txSheet) {
-      txSheet.appendRow([
-        "'" + data.id, // ID 前加單引號強制儲存為字串
-        data.date, 
-        data.type, 
-        "'" + cleanSymbol, 
-        data.stockName, 
-        data.shares, 
-        data.pricePerShare, 
-        data.fees
-      ]);
+      txSheet.appendRow(["'" + data.id, data.date, data.type, "'" + cleanSymbol, data.stockName, data.shares, data.pricePerShare, data.fees]);
     }
     
-    // 更新價格表邏輯...
     if (priceSheet) {
       var colAValues = priceSheet.getRange("A:A").getValues();
       var exists = false;
       for (var i = 0; i < colAValues.length; i++) {
-        if (String(colAValues[i][0]).trim() === cleanSymbol) {
-          exists = true;
-          break;
-        }
+        if (String(colAValues[i][0]).trim() === cleanSymbol) { exists = true; break; }
       }
       if (!exists) {
         var nextRow = priceSheet.getLastRow() + 1;
         priceSheet.getRange(nextRow, 1).setValue("'" + cleanSymbol);
-        priceSheet.getRange(nextRow, 2).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + nextRow + ', "price"), 0)');
-        priceSheet.getRange(nextRow, 3).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + nextRow + ', "changepct"), 0)');
+        priceSheet.getRange(nextRow, 2).setFormula('GET_TW_PRICE(A' + nextRow + ')');
+        priceSheet.getRange(nextRow, 3).setFormula('GET_STOCK_CHANGE(A' + nextRow + ')');
+        priceSheet.getRange(nextRow, 4).setFormula('getStockSector(A' + nextRow + ')');
       }
     }
-
-    return ContentService.createTextOutput(JSON.stringify({status: "success"}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return createJsonOutput({status: "success"});
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return createJsonOutput({status: "error", message: err.toString()});
   }
+}
+
+function createJsonOutput(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
 `;

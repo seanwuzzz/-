@@ -18,7 +18,7 @@ export interface StockPrice {
   price: number;
   changePercent: number;
   name?: string;
-  sector?: string; // Added: sector information
+  sector?: string;
 }
 
 export interface PortfolioPosition {
@@ -34,7 +34,7 @@ export interface PortfolioPosition {
   dayChangePercent: number;
   dayChangeAmount: number;
   realizedPL: number;
-  sector: string; // Added: carry over sector to position
+  sector: string;
 }
 
 export interface PortfolioSummary {
@@ -44,6 +44,14 @@ export interface PortfolioSummary {
   totalPLPercent: number;
   totalRealizedPL: number;
   dayPL: number;
+}
+
+export interface StockNews {
+  title: string;
+  snippet: string;
+  url: string;
+  source: string;
+  date?: string;
 }
 
 export interface AppSettings {

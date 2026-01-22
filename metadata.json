@@ -1,5 +1,5 @@
 {
-  "name": "TW Stock Tracker AI",
+  "name": "投資組合管理",
   "description": "A personal Taiwan stock portfolio tracker with Google Sheets integration and Gemini AI analysis.",
   "requestFramePermissions": []
 }
