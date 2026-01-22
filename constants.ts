@@ -1,10 +1,10 @@
 import { Transaction, StockPrice } from './types';
 
 export const DEMO_PRICES: StockPrice[] = [
-  { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電' },
-  { symbol: '2317', price: 145, changePercent: -0.5, name: '鴻海' },
-  { symbol: '0050', price: 160, changePercent: 0.8, name: '元大台灣50' },
-  { symbol: '2454', price: 950, changePercent: 2.1, name: '聯發科' },
+  { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體' },
+  { symbol: '2317', price: 145, changePercent: -0.5, name: '鴻海', sector: '電子代工' },
+  { symbol: '0050', price: 160, changePercent: 0.8, name: '元大台灣50', sector: 'ETF' },
+  { symbol: '2454', price: 950, changePercent: 2.1, name: '聯發科', sector: 'IC設計' },
 ];
 
 export const DEMO_TRANSACTIONS: Transaction[] = [
@@ -15,25 +15,22 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 // Google Apps Script Code
-// 此腳本會自動處理 Transactions 寫入。
-// 對於 Prices 分頁，它會尋找 A 欄 (Symbol) 第一個空白的列寫入代號，以保留 B/C 欄可能預填的公式。
+// 此腳本優化了寫入邏輯，會優先填入 Prices 頁面 A 欄 (Symbol) 的第一個空行。
 
 function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var txSheet = ss.getSheetByName("Transactions");
   var priceSheet = ss.getSheetByName("Prices");
   
-  // 1. 讀取交易紀錄 (Transactions)
-  // 欄位順序: ID, Date, Type, Symbol, Name, Shares, Price, Fee
   var txData = [];
-  if (txSheet.getLastRow() > 1) {
+  if (txSheet && txSheet.getLastRow() > 1) {
     var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
     txData = rows.map(function(r) {
       return {
         id: r[0], 
         date: r[1], 
         type: r[2], 
-        stockSymbol: String(r[3]).trim().toUpperCase(), 
+        stockSymbol: String(r[3]), 
         stockName: r[4], 
         shares: r[5], 
         pricePerShare: r[6], 
@@ -42,22 +39,19 @@ function doGet(e) {
     });
   }
 
-  // 2. 讀取現價 (Prices)
-  // 欄位順序: Symbol, Price, Change%
   var quotes = [];
   if (priceSheet && priceSheet.getLastRow() > 1) {
-    // 讀取直到最後一列，不管是否有空白 (因為使用者可能預填公式)
-    var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 3).getValues();
-    
-    // 只回傳有 Symbol 的資料
+    // 讀取 A:D 欄 (代號, 價格, 漲跌, 產業)
+    var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 4).getValues();
     for(var i=0; i<pRows.length; i++) {
        var row = pRows[i];
-       var sym = String(row[0]).trim().toUpperCase();
+       var sym = String(row[0]).trim();
        if(sym !== "") {
           quotes.push({
             symbol: sym,
             price: Number(row[1]),
-            changePercent: Number(row[2])
+            changePercent: Number(row[2]),
+            sector: String(row[3] || "未分類")
           });
        }
     }
@@ -76,64 +70,52 @@ function doPost(e) {
   
   try {
     var data = JSON.parse(e.postData.contents);
-    var cleanSymbol = String(data.stockSymbol).trim().toUpperCase();
+    var cleanSymbol = String(data.stockSymbol).trim();
     
-    // 1. 寫入交易紀錄 (Transactions 總是附加在最後)
-    txSheet.appendRow([
-      data.id, 
-      data.date, 
-      data.type, 
-      cleanSymbol, 
-      data.stockName, 
-      data.shares, 
-      data.pricePerShare, 
-      data.fees
-    ]);
+    // 1. 寫入交易紀錄 (Transactions 頁面直接附加在末尾)
+    if (txSheet) {
+      txSheet.appendRow([
+        data.id, 
+        data.date, 
+        data.type, 
+        "'" + cleanSymbol, 
+        data.stockName, 
+        data.shares, 
+        data.pricePerShare, 
+        data.fees
+      ]);
+    }
     
-    // 2. 更新 Prices 分頁 (檢查是否存在，若不存在則填入第一個空白列)
+    // 2. 更新或新增股票代號 (Prices 頁面)
     if (priceSheet) {
-      var lastRow = priceSheet.getLastRow();
-      var targetRow = -1;
+      // 抓取整條 A 欄來搜尋
+      var colAValues = priceSheet.getRange("A:A").getValues();
       var exists = false;
+      var firstEmptyRow = -1;
       
-      // 搜尋現有資料 (範圍: Row 2 到 LastRow)
-      if (lastRow > 1) {
-        var aValues = priceSheet.getRange(2, 1, lastRow - 1, 1).getValues();
-        for (var i = 0; i < aValues.length; i++) {
-          var val = String(aValues[i][0]).trim().toUpperCase();
-          
-          if (val === cleanSymbol) {
-            exists = true;
-            break;
-          }
-          
-          // 紀錄第一個遇到的 A 欄空白列
-          if (val === "" && targetRow === -1) {
-             targetRow = i + 2; // +2 因為 i=0 是 Row 2
-          }
+      for (var i = 0; i < colAValues.length; i++) {
+        var cellVal = String(colAValues[i][0]).trim();
+        
+        // 檢查是否已存在
+        if (cellVal === cleanSymbol) {
+          exists = true;
+          break;
+        }
+        
+        // 尋找第一個 A 欄為空的行 (跳過標題列 i=0)
+        if (i > 0 && cellVal === "" && firstEmptyRow === -1) {
+          firstEmptyRow = i + 1;
         }
       }
       
       if (!exists) {
-        // 如果沒有找到空白列，就寫在資料最後面的一列
-        if (targetRow === -1) {
-           targetRow = lastRow + 1;
-        }
-
-        // 寫入代號
-        priceSheet.getRange(targetRow, 1).setValue(cleanSymbol);
+        // 如果沒找到中間的空行，就使用 getLastRow() + 1
+        var targetRow = firstEmptyRow !== -1 ? firstEmptyRow : (priceSheet.getLastRow() + 1);
         
-        // 檢查 B 欄 (Price) 是否有公式，若無則補上
-        var cellB = priceSheet.getRange(targetRow, 2);
-        if (!cellB.getFormula() && cellB.getValue() === "") {
-             cellB.setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "price"), 0)');
-        }
-        
-        // 檢查 C 欄 (Change) 是否有公式，若無則補上
-        var cellC = priceSheet.getRange(targetRow, 3);
-        if (!cellC.getFormula() && cellC.getValue() === "") {
-             cellC.setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "changepct"), 0)');
-        }
+        // 只寫入代號、價格公式、漲跌公式。產業別留空或由使用者自行輸入。
+        priceSheet.getRange(targetRow, 1).setValue("'" + cleanSymbol);
+        priceSheet.getRange(targetRow, 2).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "price"), 0)');
+        priceSheet.getRange(targetRow, 3).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "changepct"), 0)');
       }
     }
 

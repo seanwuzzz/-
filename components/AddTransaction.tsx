@@ -27,7 +27,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     try {
         await onAdd({
             date: formData.date,
-            symbol: formData.symbol.trim().toUpperCase(),
+            symbol: formData.symbol.trim(), // Keep exact string for 0050
             name: formData.name,
             type: formData.type,
             shares: Number(formData.shares),
@@ -35,7 +35,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
             fee: Number(formData.fee)
         });
     } catch (err) {
-        alert("Failed to add transaction");
+        alert("新增失敗，請檢查網路連線。");
     } finally {
         setLoading(false);
     }
@@ -55,7 +55,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     required
                     value={formData.date}
                     onChange={e => setFormData({...formData, date: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>
             <div>
@@ -63,10 +63,10 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 <input
                     type="text"
                     required
-                    placeholder="2330"
+                    placeholder="例如: 0050"
                     value={formData.symbol}
                     onChange={e => setFormData({...formData, symbol: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 uppercase"
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>
           </div>
@@ -79,7 +79,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 placeholder="台積電"
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
             />
           </div>
 
@@ -109,7 +109,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     placeholder="1000"
                     value={formData.shares}
                     onChange={e => setFormData({...formData, shares: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>
             <div>
@@ -121,7 +121,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     placeholder="580"
                     value={formData.price}
                     onChange={e => setFormData({...formData, price: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>
           </div>
@@ -133,7 +133,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 required
                 value={formData.fee}
                 onChange={e => setFormData({...formData, fee: e.target.value})}
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
             />
           </div>
 
@@ -141,17 +141,17 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
             <button
                 type="button"
                 onClick={onCancel}
-                className="flex-1 py-3 rounded-xl border border-slate-600 text-slate-300 font-bold"
+                className="flex-1 py-3 rounded-xl border border-slate-600 text-slate-300 font-bold text-sm"
             >
                 取消
             </button>
             <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-white text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-100 flex justify-center items-center gap-2"
+                className="flex-1 bg-white text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-100 flex justify-center items-center gap-2 text-sm"
             >
-                {loading ? <Loader2 className="animate-spin" /> : <PlusCircle size={20} />}
-                新增
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <PlusCircle size={18} />}
+                確認新增
             </button>
           </div>
         </form>

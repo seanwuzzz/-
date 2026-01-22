@@ -1,6 +1,6 @@
 import React from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, PieChart } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Briefcase, Hash } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
@@ -9,7 +9,6 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ summary, positions }) => {
   
-  // Helper for conditional coloring (TW: Red Up, Green Down)
   const getColor = (val: number) => {
     if (val > 0) return 'text-twRed';
     if (val < 0) return 'text-twGreen';
@@ -28,26 +27,35 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-3xl shadow-xl border border-slate-700/50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
         <div className="relative z-10">
-          <h2 className="text-slate-400 text-sm font-medium mb-1 flex items-center gap-2">
+          <h2 className="text-slate-400 text-xs font-medium mb-1 flex items-center gap-2 uppercase tracking-wider">
             <DollarSign size={14} /> 總資產市值
           </h2>
-          <div className="text-4xl font-bold text-white tracking-tight mb-4">
+          <div className="text-4xl font-bold text-white tracking-tight mb-6">
             ${summary.totalAssets.toLocaleString()}
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-black/20 p-3 rounded-xl">
-               <div className="text-xs text-slate-400 mb-1">總損益</div>
-               <div className={`text-lg font-bold ${getColor(summary.totalPL)}`}>
-                 {summary.totalPL > 0 ? '+' : ''}{summary.totalPL.toLocaleString()}
-                 <span className="text-xs ml-1 opacity-80">({summary.totalPLPercent.toFixed(2)}%)</span>
-               </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
+                    <div className="text-[10px] text-slate-500 mb-1">未實現損益</div>
+                    <div className={`text-lg font-bold ${getColor(summary.totalPL)}`}>
+                        {summary.totalPL > 0 ? '+' : ''}{summary.totalPL.toLocaleString()}
+                        <span className="text-[10px] ml-1 opacity-80">({summary.totalPLPercent.toFixed(2)}%)</span>
+                    </div>
+                </div>
+                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
+                    <div className="text-[10px] text-slate-500 mb-1">今日變動</div>
+                    <div className={`text-lg font-bold ${getColor(summary.dayPL)}`}>
+                        {summary.dayPL > 0 ? '+' : ''}{summary.dayPL.toLocaleString()}
+                    </div>
+                </div>
             </div>
-            <div className="bg-black/20 p-3 rounded-xl">
-               <div className="text-xs text-slate-400 mb-1">今日變動</div>
-               <div className={`text-lg font-bold ${getColor(summary.dayPL)}`}>
-                 {summary.dayPL > 0 ? '+' : ''}{summary.dayPL.toLocaleString()}
-               </div>
+            
+            <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex justify-between items-center">
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">已實現損益 (Realized P/L)</div>
+                <div className={`text-sm font-bold ${getColor(summary.totalRealizedPL)}`}>
+                    {summary.totalRealizedPL > 0 ? '+' : ''}{summary.totalRealizedPL.toLocaleString()}
+                </div>
             </div>
           </div>
         </div>
@@ -56,7 +64,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
       {/* Holdings List */}
       <div>
         <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-            <PieChart size={18} className="text-blue-400"/> 持股明細
+            <Briefcase size={18} className="text-blue-400"/> 持股明細
         </h3>
         
         {positions.length === 0 ? (
@@ -71,15 +79,20 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
                         <div>
                             <div className="flex items-center gap-2">
                                 <span className="font-bold text-lg text-white">{pos.symbol}</span>
-                                <span className="text-sm text-slate-400 font-medium">{pos.name}</span>
+                                <span className="text-xs text-slate-400 font-medium px-2 py-0.5 bg-slate-800 rounded">{pos.name}</span>
                             </div>
-                            <div className="text-xs text-slate-400 mt-1">
-                                {pos.shares} 股 • 均價 {pos.avgCost.toFixed(1)}
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="flex items-center gap-1 text-[9px] text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                                    <Hash size={10} /> {pos.sector}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                    {pos.shares.toLocaleString()} 股 • 均價 {pos.avgCost.toFixed(2)}
+                                </span>
                             </div>
                         </div>
                         <div className="text-right">
                             <div className="text-lg font-bold text-white">${pos.currentPrice}</div>
-                            <div className={`text-xs font-medium px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1 ${getBgColor(pos.dayChangePercent)} ${getColor(pos.dayChangePercent)}`}>
+                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1 ${getBgColor(pos.dayChangePercent)} ${getColor(pos.dayChangePercent)}`}>
                                 {pos.dayChangePercent > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                 {Math.abs(pos.dayChangePercent)}%
                             </div>
@@ -89,7 +102,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
                     <div className="h-px bg-slate-700/50 my-3"></div>
                     
                     <div className="flex justify-between items-end">
-                         <div className="text-xs text-slate-500">
+                         <div className="text-[10px] text-slate-500">
                             市值 ${pos.currentValue.toLocaleString()}
                          </div>
                          <div className={`text-sm font-bold ${getColor(pos.unrealizedPL)}`}>
