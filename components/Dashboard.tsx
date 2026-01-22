@@ -1,13 +1,14 @@
 import React from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, Briefcase, Hash } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Briefcase, Hash, ChevronRight } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
   positions: PortfolioPosition[];
+  onStockClick: (symbol: string) => void;
 }
 
-const Dashboard: React.FC<Props> = ({ summary, positions }) => {
+const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
   
   const getColor = (val: number) => {
     if (val > 0) return 'text-twRed';
@@ -38,15 +39,18 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
                     <div className="text-[10px] text-slate-500 mb-1">未實現損益</div>
-                    <div className={`text-lg font-bold ${getColor(summary.totalPL)}`}>
-                        {summary.totalPL > 0 ? '+' : ''}{summary.totalPL.toLocaleString()}
-                        <span className="text-[10px] ml-1 opacity-80">({summary.totalPLPercent.toFixed(2)}%)</span>
+                    <div className={`text-lg font-bold ${getColor(summary.totalPL)} flex flex-col leading-tight`}>
+                        <span>{summary.totalPL > 0 ? '+' : ''}{summary.totalPL.toLocaleString()}</span>
+                        <span className="text-[11px] mt-1 opacity-80 font-medium tracking-wide">
+                            ({summary.totalPLPercent.toFixed(2)}%)
+                        </span>
                     </div>
                 </div>
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
                     <div className="text-[10px] text-slate-500 mb-1">今日變動</div>
-                    <div className={`text-lg font-bold ${getColor(summary.dayPL)}`}>
-                        {summary.dayPL > 0 ? '+' : ''}{summary.dayPL.toLocaleString()}
+                    <div className={`text-lg font-bold ${getColor(summary.dayPL)} flex flex-col leading-tight`}>
+                        <span>{summary.dayPL > 0 ? '+' : ''}{summary.dayPL.toLocaleString()}</span>
+                        <span className="text-[11px] mt-1 text-slate-500 font-normal">今日損益</span>
                     </div>
                 </div>
             </div>
@@ -74,11 +78,15 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
         ) : (
             <div className="space-y-3">
             {positions.map((pos) => (
-                <div key={pos.symbol} className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm hover:border-slate-600 transition-colors">
+                <div 
+                    key={pos.symbol} 
+                    onClick={() => onStockClick(pos.symbol)}
+                    className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm hover:border-blue-500/50 hover:bg-slate-800/80 transition-all cursor-pointer group active:scale-[0.98]"
+                >
                     <div className="flex justify-between items-start mb-2">
-                        <div>
+                        <div className="flex-1">
                             <div className="flex items-center gap-2">
-                                <span className="font-bold text-lg text-white">{pos.symbol}</span>
+                                <span className="font-bold text-lg text-white group-hover:text-blue-400 transition-colors">{pos.symbol}</span>
                                 <span className="text-xs text-slate-400 font-medium px-2 py-0.5 bg-slate-800 rounded">{pos.name}</span>
                             </div>
                             <div className="flex items-center gap-2 mt-1">
@@ -86,16 +94,19 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
                                     <Hash size={10} /> {pos.sector}
                                 </span>
                                 <span className="text-[10px] text-slate-400">
-                                    {pos.shares.toLocaleString()} 股 • 均價 {pos.avgCost.toFixed(2)}
+                                    {pos.shares.toLocaleString()} 股 • 均價 {pos.avgCost.toFixed(1)}
                                 </span>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <div className="text-lg font-bold text-white">${pos.currentPrice}</div>
-                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1 ${getBgColor(pos.dayChangePercent)} ${getColor(pos.dayChangePercent)}`}>
-                                {pos.dayChangePercent > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                {Math.abs(pos.dayChangePercent)}%
+                        <div className="text-right flex items-start gap-2">
+                            <div>
+                                <div className="text-lg font-bold text-white">${pos.currentPrice}</div>
+                                <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1 ${getBgColor(pos.dayChangePercent)} ${getColor(pos.dayChangePercent)}`}>
+                                    {pos.dayChangePercent > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                                    {Math.abs(pos.dayChangePercent)}%
+                                </div>
                             </div>
+                            <ChevronRight size={16} className="text-slate-600 group-hover:text-blue-500 mt-1 transition-colors" />
                         </div>
                     </div>
                     
@@ -105,8 +116,13 @@ const Dashboard: React.FC<Props> = ({ summary, positions }) => {
                          <div className="text-[10px] text-slate-500">
                             市值 ${pos.currentValue.toLocaleString()}
                          </div>
-                         <div className={`text-sm font-bold ${getColor(pos.unrealizedPL)}`}>
-                            {pos.unrealizedPL > 0 ? '+' : ''}{pos.unrealizedPL.toLocaleString()} ({pos.unrealizedPLPercent.toFixed(2)}%)
+                         <div className="text-right">
+                            <div className={`text-sm font-bold ${getColor(pos.unrealizedPL)}`}>
+                                {pos.unrealizedPL > 0 ? '+' : ''}{pos.unrealizedPL.toLocaleString()}
+                            </div>
+                            <div className={`text-[10px] font-medium ${getColor(pos.unrealizedPL)} opacity-80`}>
+                                {pos.unrealizedPLPercent.toFixed(2)}%
+                            </div>
                          </div>
                     </div>
                 </div>

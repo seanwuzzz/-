@@ -14,6 +14,7 @@ function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [prices, setPrices] = useState<StockPrice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [filterSymbol, setFilterSymbol] = useState<string | null>(null);
   
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('twStockSettings');
@@ -25,7 +26,6 @@ function App() {
 
   const fetchData = async () => {
     if (settings.useDemoData) {
-        // 如果是 Demo 模式且已經有資料了，不要覆蓋它（除非是第一次載入）
         if (transactions.length === 0) {
             setTransactions([...DEMO_TRANSACTIONS]);
         }
@@ -109,8 +109,6 @@ function App() {
   };
 
   const handleDeleteTransaction = async (id: string) => {
-    console.log('App: 執行刪除, ID:', id);
-    
     if (settings.useDemoData) {
         setTransactions(prev => prev.filter(t => t.id !== id));
         return;
@@ -125,15 +123,18 @@ function App() {
         
         const json = await res.json();
         if (json.status === 'error') throw new Error(json.message);
-        
-        // 刪除成功，重新拉取
         await fetchData();
     } catch (e) {
         console.error("Delete failed", e);
-        alert("刪除失敗，請檢查 GAS 腳本權限或網路。");
+        alert("刪除失敗，請檢查網路連線。");
     } finally {
         setLoading(false);
     }
+  };
+
+  const handleStockDrillDown = (symbol: string) => {
+    setFilterSymbol(symbol);
+    setActiveTab(Tab.HISTORY);
   };
 
   const handleSaveSettings = (newSettings: AppSettings) => {
@@ -168,11 +169,19 @@ function App() {
       )}
 
       <main className="max-w-md mx-auto min-h-screen relative overflow-x-hidden">
-        {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} />}
+        {activeTab === Tab.HOME && (
+            <Dashboard 
+                summary={summary} 
+                positions={positions} 
+                onStockClick={handleStockDrillDown}
+            />
+        )}
         {activeTab === Tab.HISTORY && (
             <HistoryList 
                 transactions={processedTransactions} 
                 onDelete={handleDeleteTransaction} 
+                filterSymbol={filterSymbol}
+                onClearFilter={() => setFilterSymbol(null)}
             />
         )}
         {activeTab === Tab.ANALYSIS && <PortfolioAnalysis summary={summary} positions={positions} />}
@@ -187,7 +196,7 @@ function App() {
       {activeTab !== Tab.ADD && (
         <nav className="fixed bottom-0 w-full z-50 bg-cardBg/90 backdrop-blur-lg border-t border-slate-800 pb-safe">
             <div className="max-w-md mx-auto flex justify-around items-center p-2">
-                <button onClick={() => setActiveTab(Tab.HOME)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HOME ? 'text-blue-400' : 'text-slate-500'}`}><LayoutDashboard size={20} /><span className="text-[10px] mt-1 font-medium">總覽</span></button>
+                <button onClick={() => { setActiveTab(Tab.HOME); setFilterSymbol(null); }} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HOME ? 'text-blue-400' : 'text-slate-500'}`}><LayoutDashboard size={20} /><span className="text-[10px] mt-1 font-medium">總覽</span></button>
                 <button onClick={() => setActiveTab(Tab.HISTORY)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HISTORY ? 'text-blue-400' : 'text-slate-500'}`}><History size={20} /><span className="text-[10px] mt-1 font-medium">歷史</span></button>
                 <button onClick={() => setActiveTab(Tab.ADD)} className="flex flex-col items-center justify-center -mt-8 bg-blue-600 hover:bg-blue-500 text-white w-14 h-14 rounded-full shadow-lg shadow-blue-600/30 transition-transform hover:scale-105 active:scale-95"><Plus size={28} /></button>
                 <button onClick={() => setActiveTab(Tab.ANALYSIS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.ANALYSIS ? 'text-blue-400' : 'text-slate-500'}`}><BarChart2 size={20} /><span className="text-[10px] mt-1 font-medium">分析</span></button>

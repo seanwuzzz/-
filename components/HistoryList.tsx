@@ -1,21 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ProcessedTransaction } from '../types';
-import { ArrowUpRight, ArrowDownRight, History as HistoryIcon, Tag, Trash2, X, Check } from 'lucide-react';
+import { 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  History as HistoryIcon, 
+  Tag, 
+  Trash2, 
+  X, 
+  Check, 
+  FilterX, 
+  ArrowUpDown,
+  CalendarDays,
+  CircleDollarSign
+} from 'lucide-react';
 
 interface Props {
   transactions: ProcessedTransaction[];
   onDelete: (id: string) => Promise<void>;
+  filterSymbol?: string | null;
+  onClearFilter?: () => void;
 }
 
-const HistoryList: React.FC<Props> = ({ transactions, onDelete }) => {
-  // 用來追蹤哪一筆交易正處於「等待確認刪除」的狀態
+type SortField = 'date' | 'amount';
+type SortOrder = 'desc' | 'asc';
+
+const HistoryList: React.FC<Props> = ({ transactions, onDelete, filterSymbol, onClearFilter }) => {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   const getColor = (val: number) => (val >= 0 ? 'text-twRed' : 'text-twGreen');
   const getBgColor = (val: number) => (val >= 0 ? 'bg-twRed/10' : 'bg-twGreen/10');
 
-  // 如果點擊其他地方，取消確認狀態
   useEffect(() => {
     const handleClickOutside = () => setConfirmingId(null);
     window.addEventListener('click', handleClickOutside);
@@ -24,11 +41,9 @@ const HistoryList: React.FC<Props> = ({ transactions, onDelete }) => {
 
   const handleDeleteClick = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    e.stopPropagation(); // 防止觸發外層事件或視窗點擊監聽
+    e.stopPropagation();
     
     if (confirmingId === id) {
-      // 第二次點擊：執行刪除
-      console.log('HistoryList: 執行最終刪除, ID:', id);
       setIsDeleting(true);
       try {
         await onDelete(id);
@@ -39,32 +54,111 @@ const HistoryList: React.FC<Props> = ({ transactions, onDelete }) => {
         setIsDeleting(false);
       }
     } else {
-      // 第一次點擊：進入確認模式
-      console.log('HistoryList: 進入確認模式, ID:', id);
       setConfirmingId(id);
     }
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+        setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+        setSortField(field);
+        setSortOrder('desc');
+    }
+  };
+
+  const sortedTransactions = useMemo(() => {
+    const filtered = filterSymbol 
+        ? transactions.filter(t => t.symbol === filterSymbol)
+        : [...transactions];
+
+    return filtered.sort((a, b) => {
+        let comparison = 0;
+        if (sortField === 'date') {
+            comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+        } else if (sortField === 'amount') {
+            const amountA = a.shares * a.price;
+            const amountB = b.shares * b.price;
+            comparison = amountA - amountB;
+        }
+        return sortOrder === 'desc' ? -comparison : comparison;
+    });
+  }, [transactions, filterSymbol, sortField, sortOrder]);
+
   if (transactions.length === 0) {
     return (
-      <div className="p-10 text-center text-slate-500">
-        尚無交易紀錄。
+      <div className="p-10 text-center flex flex-col items-center gap-4">
+        <div className="text-slate-500">尚無交易紀錄。</div>
+      </div>
+    );
+  }
+
+  if (sortedTransactions.length === 0 && filterSymbol) {
+    return (
+      <div className="p-10 text-center flex flex-col items-center gap-4">
+        <div className="text-slate-500">{`尚無 ${filterSymbol} 的交易紀錄。`}</div>
+        <button 
+            onClick={onClearFilter}
+            className="text-blue-400 text-sm flex items-center gap-1 hover:underline"
+        >
+            <FilterX size={16} /> 查看所有交易
+        </button>
       </div>
     );
   }
 
   return (
     <div className="p-4 pb-24 space-y-4 animate-fade-in">
-      <h2 className="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2">
-        <HistoryIcon size={24} className="text-blue-400" /> 交易紀錄
-      </h2>
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-white text-center flex items-center justify-center gap-2">
+            <HistoryIcon size={24} className="text-blue-400" /> 
+            {filterSymbol ? `${filterSymbol} 交易紀錄` : '交易紀錄'}
+        </h2>
+        
+        <div className="flex flex-col gap-3 mt-4">
+            {/* Sorting Controls */}
+            <div className="flex items-center justify-center gap-2">
+                <button 
+                    onClick={() => handleSort('date')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        sortField === 'date' 
+                        ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
+                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}
+                >
+                    <CalendarDays size={14} />
+                    日期 {sortField === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
+                </button>
+                <button 
+                    onClick={() => handleSort('amount')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        sortField === 'amount' 
+                        ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
+                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}
+                >
+                    <CircleDollarSign size={14} />
+                    金額 {sortField === 'amount' && (sortOrder === 'desc' ? '↓' : '↑')}
+                </button>
+            </div>
+
+            {filterSymbol && (
+                <div className="flex justify-center">
+                    <button 
+                        onClick={onClearFilter}
+                        className="text-[10px] bg-slate-800 text-slate-500 px-3 py-1 rounded-full border border-slate-700 hover:text-white hover:border-slate-500 flex items-center gap-1 transition-all"
+                    >
+                        <FilterX size={12} /> 清除代號過濾 ({filterSymbol})
+                    </button>
+                </div>
+            )}
+        </div>
+      </div>
 
       <div className="space-y-3">
-        {transactions.map((tx) => (
+        {sortedTransactions.map((tx) => (
           <div key={tx.id} className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm relative overflow-visible transition-all">
-            
-            {/* 兩段式確認按鈕 */}
-            <div className="absolute -top-1 -right-1 z-[100] flex gap-1">
+            <div className="absolute -top-1 -right-1 z-10 flex gap-1">
                 {confirmingId === tx.id ? (
                     <>
                         <button 
@@ -88,7 +182,7 @@ const HistoryList: React.FC<Props> = ({ transactions, onDelete }) => {
                     <button 
                         type="button"
                         onClick={(e) => handleDeleteClick(e, tx.id)}
-                        className="p-2.5 bg-slate-800 text-slate-400 hover:text-twRed hover:bg-slate-700 active:scale-90 transition-all border border-slate-600 rounded-full shadow-xl"
+                        className="p-2.5 bg-slate-800 text-slate-400 hover:text-twRed hover:bg-slate-700 active:scale-90 transition-all border border-slate-600 rounded-full shadow-sm"
                         aria-label="刪除紀錄"
                     >
                         <Trash2 size={16} />
@@ -127,11 +221,14 @@ const HistoryList: React.FC<Props> = ({ transactions, onDelete }) => {
                         <Tag size={12} /> 手續費: ${tx.fee}
                     </div>
                     
-                    {tx.realizedPL !== undefined && (
-                        <div className={`text-xs font-bold px-3 py-1 rounded-full ${getBgColor(tx.realizedPL)} ${getColor(tx.realizedPL)}`}>
-                            {tx.realizedPL >= 0 ? '獲利' : '虧損'} ${Math.abs(Math.round(tx.realizedPL)).toLocaleString()}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-500">成交額: ${(tx.shares * tx.price).toLocaleString()}</span>
+                        {tx.realizedPL !== undefined && (
+                            <div className={`text-xs font-bold px-3 py-1 rounded-full ${getBgColor(tx.realizedPL)} ${getColor(tx.realizedPL)}`}>
+                                {tx.realizedPL >= 0 ? '獲利' : '虧損'} ${Math.abs(Math.round(tx.realizedPL)).toLocaleString()}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
           </div>
