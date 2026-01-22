@@ -15,7 +15,7 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 // Google Apps Script Code
-// 此腳本優化了寫入邏輯，會優先填入 Prices 頁面 A 欄 (Symbol) 的第一個空行。
+// 此腳本支援新增、讀取以及刪除交易紀錄。
 
 function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -27,7 +27,7 @@ function doGet(e) {
     var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
     txData = rows.map(function(r) {
       return {
-        id: r[0], 
+        id: String(r[0]), // 強制轉為字串
         date: r[1], 
         type: r[2], 
         stockSymbol: String(r[3]), 
@@ -41,7 +41,6 @@ function doGet(e) {
 
   var quotes = [];
   if (priceSheet && priceSheet.getLastRow() > 1) {
-    // 讀取 A:D 欄 (代號, 價格, 漲跌, 產業)
     var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 4).getValues();
     for(var i=0; i<pRows.length; i++) {
        var row = pRows[i];
@@ -70,12 +69,31 @@ function doPost(e) {
   
   try {
     var data = JSON.parse(e.postData.contents);
+    
+    // --- 處理刪除邏輯 ---
+    if (data.action === "DELETE") {
+      if (txSheet) {
+        var idToDelete = String(data.id).trim();
+        var rows = txSheet.getDataRange().getValues();
+        for (var i = 1; i < rows.length; i++) {
+          // 強制將工作表中的 ID 也轉為字串並去空白進行比對
+          if (String(rows[i][0]).trim() === idToDelete) {
+            txSheet.deleteRow(i + 1);
+            return ContentService.createTextOutput(JSON.stringify({status: "success", deletedId: idToDelete}))
+              .setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "找不到該交易 ID: " + data.id}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // --- 處理新增邏輯 ---
     var cleanSymbol = String(data.stockSymbol).trim();
     
-    // 1. 寫入交易紀錄 (Transactions 頁面直接附加在末尾)
     if (txSheet) {
       txSheet.appendRow([
-        data.id, 
+        "'" + data.id, // ID 前加單引號強制儲存為字串
         data.date, 
         data.type, 
         "'" + cleanSymbol, 
@@ -86,36 +104,21 @@ function doPost(e) {
       ]);
     }
     
-    // 2. 更新或新增股票代號 (Prices 頁面)
+    // 更新價格表邏輯...
     if (priceSheet) {
-      // 抓取整條 A 欄來搜尋
       var colAValues = priceSheet.getRange("A:A").getValues();
       var exists = false;
-      var firstEmptyRow = -1;
-      
       for (var i = 0; i < colAValues.length; i++) {
-        var cellVal = String(colAValues[i][0]).trim();
-        
-        // 檢查是否已存在
-        if (cellVal === cleanSymbol) {
+        if (String(colAValues[i][0]).trim() === cleanSymbol) {
           exists = true;
           break;
         }
-        
-        // 尋找第一個 A 欄為空的行 (跳過標題列 i=0)
-        if (i > 0 && cellVal === "" && firstEmptyRow === -1) {
-          firstEmptyRow = i + 1;
-        }
       }
-      
       if (!exists) {
-        // 如果沒找到中間的空行，就使用 getLastRow() + 1
-        var targetRow = firstEmptyRow !== -1 ? firstEmptyRow : (priceSheet.getLastRow() + 1);
-        
-        // 只寫入代號、價格公式、漲跌公式。產業別留空或由使用者自行輸入。
-        priceSheet.getRange(targetRow, 1).setValue("'" + cleanSymbol);
-        priceSheet.getRange(targetRow, 2).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "price"), 0)');
-        priceSheet.getRange(targetRow, 3).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "changepct"), 0)');
+        var nextRow = priceSheet.getLastRow() + 1;
+        priceSheet.getRange(nextRow, 1).setValue("'" + cleanSymbol);
+        priceSheet.getRange(nextRow, 2).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + nextRow + ', "price"), 0)');
+        priceSheet.getRange(nextRow, 3).setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + nextRow + ', "changepct"), 0)');
       }
     }
 
