@@ -50,8 +50,36 @@ function App() {
     try {
         const response = await fetch(settings.googleScriptUrl);
         const data = await response.json();
-        if (data.transactions) setTransactions(data.transactions);
-        if (data.prices) setPrices(data.prices);
+        
+        // Map GAS API structure to Internal App structure
+        if (data.transactions) {
+            const mappedTxs: Transaction[] = data.transactions.map((t: any) => ({
+                id: String(t.id),
+                date: t.date ? String(t.date).substring(0, 10) : '', // Ensure basic date string
+                symbol: String(t.stockSymbol).trim().toUpperCase(),
+                name: t.stockName,
+                type: t.type,
+                shares: Number(t.shares),
+                price: Number(t.pricePerShare),
+                fee: Number(t.fees)
+            }));
+            setTransactions(mappedTxs);
+        }
+
+        // GAS returns 'quotes', App uses 'prices'
+        if (data.quotes) {
+             const mappedPrices: StockPrice[] = data.quotes.map((q: any) => ({
+                 symbol: String(q.symbol).trim().toUpperCase(),
+                 price: Number(q.price),
+                 changePercent: Number(q.changePercent),
+                 name: undefined // GAS 'quotes' object doesn't have name
+             }));
+             setPrices(mappedPrices);
+        } else if (data.prices) {
+             // Fallback just in case
+             setPrices(data.prices);
+        }
+
     } catch (error) {
         console.error("Fetch error", error);
         alert("無法抓取資料，請檢查 URL 或網路連線。");
@@ -61,23 +89,44 @@ function App() {
   };
 
   const handleAddTransaction = async (newTx: Omit<Transaction, 'id'>) => {
+    // Generate ID client-side because your GAS script requires it in the POST body
+    const newId = new Date().getTime().toString();
+
     if (settings.useDemoData) {
-        const mockTx = { ...newTx, id: Math.random().toString() };
+        const mockTx = { ...newTx, id: newId };
         setTransactions([...transactions, mockTx]);
         setActiveTab(Tab.HOME);
         return;
     }
 
     try {
-        await fetch(settings.googleScriptUrl, {
+        // Prepare payload matching your GAS doPost expectation
+        const payload = {
+            id: newId,
+            date: newTx.date,
+            type: newTx.type,
+            stockSymbol: newTx.symbol, // Already trimmed in component
+            stockName: newTx.name,
+            shares: newTx.shares,
+            pricePerShare: newTx.price,
+            fees: newTx.fee
+        };
+
+        const res = await fetch(settings.googleScriptUrl, {
             method: 'POST',
-            body: JSON.stringify(newTx)
+            body: JSON.stringify(payload)
         });
-        await fetchData(); // Reload
+        
+        const json = await res.json();
+        if (json.status === 'error') {
+            throw new Error(json.message);
+        }
+
+        await fetchData(); // Reload to get updated list
         setActiveTab(Tab.HOME);
     } catch (e) {
         console.error(e);
-        alert("儲存失敗");
+        alert("儲存失敗: " + (e instanceof Error ? e.message : 'Unknown error'));
     }
   };
 

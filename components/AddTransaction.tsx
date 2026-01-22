@@ -27,7 +27,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     try {
         await onAdd({
             date: formData.date,
-            symbol: formData.symbol.toUpperCase(),
+            symbol: formData.symbol.trim().toUpperCase(),
             name: formData.name,
             type: formData.type,
             shares: Number(formData.shares),

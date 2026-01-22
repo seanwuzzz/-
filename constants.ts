@@ -15,76 +15,133 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 // Google Apps Script Code
-// 1. Create a Google Sheet.
-// 2. Rename Sheet1 to "Transactions".
-//    Headers (Row 1): ID, Date, Type, Symbol, Name, Shares, Price, Fee
-// 3. Create Sheet2 named "Prices".
-//    Headers: Symbol, Price, Change%
-//    - In Prices sheet, Col A is Symbol.
-//    - Col B formula: =GOOGLEFINANCE("TPE:" & A2, "price")
-//    - Col C formula: =GOOGLEFINANCE("TPE:" & A2, "changepct")
-// 4. Extensions > Apps Script. Paste this code.
-// 5. Deploy > New Deployment > Web App > Who has access: "Anyone".
+// 此腳本會自動處理 Transactions 寫入。
+// 對於 Prices 分頁，它會尋找 A 欄 (Symbol) 第一個空白的列寫入代號，以保留 B/C 欄可能預填的公式。
 
 function doGet(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const transSheet = ss.getSheetByName("Transactions");
-  const priceSheet = ss.getSheetByName("Prices");
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var txSheet = ss.getSheetByName("Transactions");
+  var priceSheet = ss.getSheetByName("Prices");
   
-  const transactions = transSheet.getDataRange().getValues().slice(1); // Skip header
-  const prices = priceSheet.getDataRange().getValues().slice(1); // Skip header
-  
-  // Map columns based on: ID, Date, Type, Symbol, Name, Shares, Price, Fee
-  const data = {
-    transactions: transactions.map(row => ({
-      id: row[0],
-      date: row[1],
-      type: row[2],
-      symbol: row[3],
-      name: row[4],
-      shares: row[5],
-      price: row[6],
-      fee: row[7]
-    })),
-    prices: prices.map(row => ({
-      symbol: row[0],
-      price: row[1],
-      changePercent: row[2]
-    }))
-  };
-  
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+  // 1. 讀取交易紀錄 (Transactions)
+  // 欄位順序: ID, Date, Type, Symbol, Name, Shares, Price, Fee
+  var txData = [];
+  if (txSheet.getLastRow() > 1) {
+    var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
+    txData = rows.map(function(r) {
+      return {
+        id: r[0], 
+        date: r[1], 
+        type: r[2], 
+        stockSymbol: String(r[3]).trim().toUpperCase(), 
+        stockName: r[4], 
+        shares: r[5], 
+        pricePerShare: r[6], 
+        fees: r[7]
+      };
+    });
+  }
+
+  // 2. 讀取現價 (Prices)
+  // 欄位順序: Symbol, Price, Change%
+  var quotes = [];
+  if (priceSheet && priceSheet.getLastRow() > 1) {
+    // 讀取直到最後一列，不管是否有空白 (因為使用者可能預填公式)
+    var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 3).getValues();
+    
+    // 只回傳有 Symbol 的資料
+    for(var i=0; i<pRows.length; i++) {
+       var row = pRows[i];
+       var sym = String(row[0]).trim().toUpperCase();
+       if(sym !== "") {
+          quotes.push({
+            symbol: sym,
+            price: Number(row[1]),
+            changePercent: Number(row[2])
+          });
+       }
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    transactions: txData,
+    quotes: quotes
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Transactions");
-  const data = JSON.parse(e.postData.contents);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var txSheet = ss.getSheetByName("Transactions");
+  var priceSheet = ss.getSheetByName("Prices");
   
-  // Generate a simple ID using timestamp if not provided
-  const id = new Date().getTime().toString();
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var cleanSymbol = String(data.stockSymbol).trim().toUpperCase();
+    
+    // 1. 寫入交易紀錄 (Transactions 總是附加在最後)
+    txSheet.appendRow([
+      data.id, 
+      data.date, 
+      data.type, 
+      cleanSymbol, 
+      data.stockName, 
+      data.shares, 
+      data.pricePerShare, 
+      data.fees
+    ]);
+    
+    // 2. 更新 Prices 分頁 (檢查是否存在，若不存在則填入第一個空白列)
+    if (priceSheet) {
+      var lastRow = priceSheet.getLastRow();
+      var targetRow = -1;
+      var exists = false;
+      
+      // 搜尋現有資料 (範圍: Row 2 到 LastRow)
+      if (lastRow > 1) {
+        var aValues = priceSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (var i = 0; i < aValues.length; i++) {
+          var val = String(aValues[i][0]).trim().toUpperCase();
+          
+          if (val === cleanSymbol) {
+            exists = true;
+            break;
+          }
+          
+          // 紀錄第一個遇到的 A 欄空白列
+          if (val === "" && targetRow === -1) {
+             targetRow = i + 2; // +2 因為 i=0 是 Row 2
+          }
+        }
+      }
+      
+      if (!exists) {
+        // 如果沒有找到空白列，就寫在資料最後面的一列
+        if (targetRow === -1) {
+           targetRow = lastRow + 1;
+        }
 
-  // Append based on: ID, Date, Type, Symbol, Name, Shares, Price, Fee
-  sheet.appendRow([
-    id,
-    data.date,
-    data.type,
-    data.symbol,
-    data.name,
-    data.shares,
-    data.price,
-    data.fee
-  ]);
-  
-  // Ensure the symbol exists in Prices sheet to trigger GoogleFinance
-  const priceSheet = ss.getSheetByName("Prices");
-  const symbols = priceSheet.getRange("A:A").getValues().flat();
-  if (!symbols.includes(data.symbol)) {
-    priceSheet.appendRow([data.symbol]);
+        // 寫入代號
+        priceSheet.getRange(targetRow, 1).setValue(cleanSymbol);
+        
+        // 檢查 B 欄 (Price) 是否有公式，若無則補上
+        var cellB = priceSheet.getRange(targetRow, 2);
+        if (!cellB.getFormula() && cellB.getValue() === "") {
+             cellB.setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "price"), 0)');
+        }
+        
+        // 檢查 C 欄 (Change) 是否有公式，若無則補上
+        var cellC = priceSheet.getRange(targetRow, 3);
+        if (!cellC.getFormula() && cellC.getValue() === "") {
+             cellC.setFormula('=IFERROR(GOOGLEFINANCE("TPE:" & A' + targetRow + ', "changepct"), 0)');
+        }
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({status: "success"}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
-  
-  return ContentService.createTextOutput(JSON.stringify({result: "success"}))
-    .setMimeType(ContentService.MimeType.JSON);
 }
 `;

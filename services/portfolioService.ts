@@ -9,8 +9,11 @@ export const calculatePortfolio = (
 
   // 1. Process Transactions
   transactions.forEach(tx => {
-    const current = positionsMap.get(tx.symbol) || {
-      symbol: tx.symbol,
+    // Normalize symbol for aggregation
+    const symbol = tx.symbol.trim().toUpperCase();
+    
+    const current = positionsMap.get(symbol) || {
+      symbol: symbol,
       name: tx.name, // Initialize with transaction name
       shares: 0,
       totalCost: 0,
@@ -44,7 +47,7 @@ export const calculatePortfolio = (
         current.totalCost = 0;
     }
 
-    positionsMap.set(tx.symbol, current);
+    positionsMap.set(symbol, current);
   });
 
   // 2. Enrich with Price Data
@@ -59,7 +62,9 @@ export const calculatePortfolio = (
 
   positionsMap.forEach((pos) => {
     if (pos.shares > 0) {
-      const priceData = prices.find(p => p.symbol === pos.symbol);
+      // Robust lookup: match symbol in prices array
+      const priceData = prices.find(p => p.symbol.trim().toUpperCase() === pos.symbol);
+      
       const currentPrice = priceData ? priceData.price : 0;
       const changePct = priceData ? priceData.changePercent : 0;
       
