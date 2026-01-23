@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
-import { PlusCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, Loader2, Calculator, AlertCircle } from 'lucide-react';
 
 interface Props {
   onAdd: (tx: Omit<Transaction, 'id'>) => Promise<void>;
@@ -9,6 +9,7 @@ interface Props {
 
 const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
   const [loading, setLoading] = useState(false);
+  const [feeError, setFeeError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     symbol: '',
@@ -23,6 +24,37 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     // 僅允許數字與英文字母，並自動轉大寫
     const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     setFormData({ ...formData, symbol: val });
+  };
+
+  const handleAutoCalculateFee = () => {
+    setFeeError(null); // 重置錯誤訊息
+
+    if (!formData.price || !formData.shares) {
+      setFeeError("請先輸入「股數」與「成交價」才能進行試算。");
+      return;
+    }
+    
+    const price = parseFloat(formData.price);
+    const shares = parseFloat(formData.shares);
+
+    if (isNaN(price) || isNaN(shares)) {
+       setFeeError("請輸入有效的數字。");
+       return;
+    }
+
+    const amount = price * shares;
+    // 買進: 0.1425%
+    // 賣出: 0.1425% + 0.3% (證交稅) = 0.4425%
+    const rate = formData.type === 'BUY' ? 0.001425 : 0.004425;
+    
+    // 四捨五入取整數
+    const calculated = Math.round(amount * rate);
+    
+    // 許多券商低消為 20 元，但這裡依使用者需求單純按比例計算，
+    // 若計算結果小於 1 (例如極小額零股)，至少設為 1，其餘情況依公式帶入
+    const finalFee = calculated < 1 ? 1 : calculated;
+
+    setFormData(prev => ({ ...prev, fee: finalFee.toString() }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,7 +147,10 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     inputMode="numeric"
                     placeholder="1000"
                     value={formData.shares}
-                    onChange={e => setFormData({...formData, shares: e.target.value})}
+                    onChange={e => {
+                        setFormData({...formData, shares: e.target.value});
+                        if (feeError) setFeeError(null);
+                    }}
                     className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>
@@ -128,22 +163,43 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     step="0.01"
                     placeholder="580"
                     value={formData.price}
-                    onChange={e => setFormData({...formData, price: e.target.value})}
+                    onChange={e => {
+                        setFormData({...formData, price: e.target.value});
+                        if (feeError) setFeeError(null);
+                    }}
                     className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>
           </div>
 
           <div>
-             <label className="block text-xs text-slate-400 mb-1">手續費</label>
-             <input
-                type="number"
-                required
-                inputMode="numeric"
-                value={formData.fee}
-                onChange={e => setFormData({...formData, fee: e.target.value})}
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
-            />
+             <label className="block text-xs text-slate-400 mb-1 flex justify-between">
+                <span>手續費 ({formData.type === 'BUY' ? '0.1425%' : '0.4425%'})</span>
+             </label>
+             <div className="relative">
+                <input
+                    type="number"
+                    required
+                    inputMode="numeric"
+                    value={formData.fee}
+                    onChange={e => setFormData({...formData, fee: e.target.value})}
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm pr-24"
+                />
+                <button
+                    type="button"
+                    onClick={handleAutoCalculateFee}
+                    className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-700 hover:bg-slate-600 text-blue-400 rounded-md text-xs font-bold flex items-center gap-1 transition-colors border border-slate-600"
+                >
+                    <Calculator size={12} />
+                    自動試算
+                </button>
+             </div>
+             {feeError && (
+                <div className="mt-2 text-xs text-twRed bg-twRed/10 p-2 rounded-lg border border-twRed/20 flex items-center gap-2 animate-pulse">
+                    <AlertCircle size={14} className="shrink-0" />
+                    {feeError}
+                </div>
+             )}
           </div>
 
           <div className="pt-4 flex gap-3">
