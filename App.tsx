@@ -57,11 +57,7 @@ function App() {
         const action = isManualRefresh ? 'REFRESH' : 'GET_DATA';
         const url = `${scriptUrl}${separator}action=${action}&t=${timestamp}`;
         
-        const response = await fetch(url, { 
-            method: 'GET',
-            cache: 'no-store'
-        });
-
+        const response = await fetch(url, { method: 'GET', cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         
@@ -99,9 +95,7 @@ function App() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(() => {
-        fetchData(undefined, false);
-    }, 5 * 60 * 1000);
+    const interval = setInterval(() => { fetchData(undefined, false); }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [settings.googleScriptUrl, settings.useDemoData]);
 
@@ -127,15 +121,11 @@ function App() {
         let news: StockNews[] = [];
         if (settings.useDemoData || !settings.googleScriptUrl) {
             await new Promise(r => setTimeout(r, 600)); 
-            news = [
-                { title: `[範例] ${symbol} ${stockName} 營收動態`, source: "範例時報", url: "#", snippet: "這是在範例模式下的內容...", date: "今日" }
-            ];
+            news = [{ title: `[範例] ${symbol} ${stockName} 市場即時報`, source: "範例時報", url: "#", snippet: "範例資料模式不支援即時 RSS 抓取...", date: "今日" }];
         } else {
-            // 向 GAS 後端請求新聞 (使用免費的 Google News RSS Proxy)
             const scriptUrl = settings.googleScriptUrl;
             const separator = scriptUrl.includes('?') ? '&' : '?';
             const url = `${scriptUrl}${separator}action=GET_NEWS&symbol=${symbol}&name=${encodeURIComponent(stockName)}`;
-            
             const response = await fetch(url);
             news = await response.json();
         }
@@ -156,7 +146,6 @@ function App() {
         setActiveTab(Tab.HOME);
         return;
     }
-    
     try {
         await fetch(settings.googleScriptUrl, {
             method: 'POST',
@@ -174,7 +163,6 @@ function App() {
         setTransactions(prev => prev.filter(t => t.id !== id));
         return;
     }
-    
     try {
         await fetch(settings.googleScriptUrl, {
             method: 'POST',
@@ -202,44 +190,21 @@ function App() {
     <div className="bg-darkBg min-h-screen text-slate-100 font-sans selection:bg-blue-500/30">
       {activeTab !== Tab.ADD && (
         <header className="sticky top-0 z-50 bg-darkBg/80 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex justify-between items-center">
-            <h1 className="font-bold text-xl tracking-wide bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                投資組合管理
-            </h1>
+            <h1 className="font-bold text-xl tracking-wide bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">投資組合管理</h1>
             <div className="flex items-center gap-2">
                 {lastUpdated && !loading && (
                     <div className="flex flex-col items-end">
-                        <span className="text-[9px] text-slate-500 uppercase tracking-tighter">Last Update</span>
-                        <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
-                            <Clock size={10} />
-                            {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                        </span>
+                        <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1"><Clock size={10} />{lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
                     </div>
                 )}
-                <button 
-                    type="button"
-                    onClick={() => fetchData(undefined, true)} 
-                    disabled={loading} 
-                    className={`p-2 rounded-full hover:bg-slate-800 transition-colors relative ${loading ? 'text-blue-400' : 'text-slate-400'}`}
-                    title="強制重新計算並同步"
-                >
-                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                </button>
+                <button type="button" onClick={() => fetchData(undefined, true)} disabled={loading} className={`p-2 rounded-full hover:bg-slate-800 transition-colors ${loading ? 'text-blue-400' : 'text-slate-400'}`}><RefreshCw size={18} className={loading ? 'animate-spin' : ''} /></button>
             </div>
         </header>
       )}
 
       <main className="max-w-md mx-auto min-h-screen relative overflow-x-hidden">
         {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} onStockClick={handleStockDrillDown} />}
-        {activeTab === Tab.HISTORY && (
-            <HistoryList 
-                transactions={processedTransactions} 
-                onDelete={handleDeleteTransaction} 
-                filterSymbol={filterSymbol}
-                onClearFilter={() => { setFilterSymbol(null); setStockNews([]); }}
-                news={stockNews}
-                newsLoading={newsLoading}
-            />
-        )}
+        {activeTab === Tab.HISTORY && <HistoryList transactions={processedTransactions} onDelete={handleDeleteTransaction} filterSymbol={filterSymbol} onClearFilter={() => { setFilterSymbol(null); setStockNews([]); }} news={stockNews} newsLoading={newsLoading} />}
         {activeTab === Tab.ANALYSIS && <PortfolioAnalysis summary={summary} positions={positions} />}
         {activeTab === Tab.ADD && <AddTransaction onAdd={handleAddTransaction} onCancel={() => setActiveTab(Tab.HOME)} />}
         {activeTab === Tab.SETTINGS && <Settings settings={settings} onSave={handleSaveSettings} />}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
-import { GAS_SCRIPT_TEMPLATE } from '../constants';
-import { Save, Copy, Check, AlertCircle } from 'lucide-react';
+import { GAS_SCRIPT_TEMPLATE, APP_VERSION } from '../constants';
+import { Save, Copy, Check, AlertCircle, Info } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
@@ -13,13 +13,12 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync with outer settings when component mounts or settings change
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
 
   const handleChange = (field: keyof AppSettings, value: any) => {
-    setError(null); // Clear error when user makes changes
+    setError(null);
     setLocalSettings(prev => ({ ...prev, [field]: value }));
   };
 
@@ -42,7 +41,6 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
     <div className="p-4 pb-24 space-y-6 text-slate-200">
       <h2 className="text-2xl font-bold text-white mb-6 text-center">設定</h2>
 
-      {/* Data Source Section */}
       <section className="bg-cardBg p-5 rounded-2xl shadow-lg border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-4">資料來源</h3>
         
@@ -71,11 +69,10 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
         )}
       </section>
 
-      {/* Setup Guide */}
       <section className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700">
         <h3 className="text-lg font-semibold text-white mb-2">如何建立 Google Sheet 後端？</h3>
         <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-          本應用程式需要配合 Google Apps Script 才能儲存資料。
+          本應用程式使用 GAS 抓取新聞 RSS，完全不產生額外 API 費用。
         </p>
         <div className="relative bg-slate-900 p-3 rounded-lg border border-slate-700 overflow-hidden">
             <pre className="text-[10px] text-slate-300 overflow-x-auto h-24 custom-scrollbar">
@@ -92,9 +89,9 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
         </div>
         <ol className="mt-4 text-[10px] text-slate-400 list-decimal list-inside space-y-1.5">
             <li>建立一個新的 Google Sheet。</li>
-            <li>將分頁命名為 <code>Transactions</code> 與 <code>Prices</code>。</li>
-            <li>工具列 &gt; 擴充功能 &gt; Apps Script &gt; 貼上代碼。</li>
-            <li>部署 &gt; 新增部署 &gt; 網頁應用程式 &gt; 所有人 (Anyone) 可存取。</li>
+            <li>分頁命名為 <code>Transactions</code> 與 <code>Prices</code>。</li>
+            <li>擴充功能 &gt; Apps Script &gt; 貼上代碼。</li>
+            <li>部署 &gt; 網頁應用程式 &gt; 權限設為「所有人」。</li>
         </ol>
       </section>
 
@@ -113,6 +110,11 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
             <Save size={20} />
             儲存並返回
         </button>
+      </div>
+
+      <div className="pt-6 border-t border-slate-800 flex flex-col items-center gap-1 opacity-40">
+        <span className="text-[10px] font-mono tracking-widest text-slate-500">VERSION</span>
+        <span className="text-xs font-bold text-slate-400">{APP_VERSION}</span>
       </div>
     </div>
   );

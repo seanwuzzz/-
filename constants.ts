@@ -1,5 +1,7 @@
 import { Transaction, StockPrice } from './types';
 
+export const APP_VERSION = "v1.1.0 (RSS-NEWS)";
+
 export const DEMO_PRICES: StockPrice[] = [
   { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體' },
   { symbol: '2317', price: 145, changePercent: -0.5, name: '鴻海', sector: '電子代工' },
@@ -16,7 +18,7 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 export const GAS_SCRIPT_TEMPLATE = `
 /**
  * Google Apps Script 後端程式碼
- * 功能：資料存取、強制刷新、以及免費新聞抓取。
+ * 功能：資料存取、強制刷新、以及免費新聞 RSS 抓取。
  */
 
 function doGet(e) {
@@ -25,7 +27,7 @@ function doGet(e) {
   var priceSheet = ss.getSheetByName("Prices");
   var txSheet = ss.getSheetByName("Transactions");
   
-  // --- 1. 免費新聞抓取功能 (使用 Google News RSS) ---
+  // --- 免費新聞抓取功能 (使用 Google News RSS) ---
   if (action === "GET_NEWS") {
     var symbol = e.parameter.symbol;
     var name = e.parameter.name || "";
@@ -35,17 +37,17 @@ function doGet(e) {
     try {
       var response = UrlFetchApp.fetch(url);
       var xml = response.getContentText();
-      // 簡單的 XML 轉 JSON 處理 (抓取 title, link, source, pubDate)
-      var items = xml.split("<item>").slice(1, 5); // 抓取前 4 則
+      var items = xml.split("<item>").slice(1, 5); 
       var news = items.map(function(item) {
-        var title = item.match(/<title>(.*?)<\/title>/)[1].replace("<![CDATA[", "").replace("]]>", "");
-        var link = item.match(/<link>(.*?)<\/link>/)[1];
-        var source = item.match(/<source.*?>(.*?)<\/source>/)[1];
+        var titleMatch = item.match(/<title>(.*?)<\/title>/);
+        var linkMatch = item.match(/<link>(.*?)<\/link>/);
+        var sourceMatch = item.match(/<source.*?>(.*?)<\/source>/);
+        
         return {
-          title: title,
-          url: link,
-          source: source,
-          snippet: "點擊連結查看全文...",
+          title: titleMatch ? titleMatch[1].replace("<![CDATA[", "").replace("]]>", "") : "無標題",
+          url: linkMatch ? linkMatch[1] : "#",
+          source: sourceMatch ? sourceMatch[1] : "新聞來源",
+          snippet: "點擊查看詳細內容...",
           date: "最新"
         };
       });
@@ -55,7 +57,6 @@ function doGet(e) {
     }
   }
 
-  // --- 2. 強制刷新機制 ---
   if (action === "REFRESH") {
     if (priceSheet && priceSheet.getLastRow() > 1) {
       var lastRow = priceSheet.getLastRow();
@@ -66,11 +67,9 @@ function doGet(e) {
       range.setFormulas(currentFormulas);
       priceSheet.getRange("E1").setValue("最後刷新: " + new Date().toLocaleString());
       SpreadsheetApp.flush();
-      Utilities.sleep(500);
     }
   }
   
-  // --- 3. 獲取交易與股價資料 ---
   var txData = [];
   if (txSheet && txSheet.getLastRow() > 1) {
     var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
@@ -115,7 +114,6 @@ function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   
   if (data.action === "DELETE") {
-    if (!txSheet) return createResponse("error");
     var idToDelete = String(data.id).trim();
     var rows = txSheet.getDataRange().getValues();
     for (var i = 1; i < rows.length; i++) {
