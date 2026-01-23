@@ -19,7 +19,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
   const [activeSubTab, setActiveSubTab] = useState<AnalysisTab>(AnalysisTab.ALLOCATION);
   const [hoverDate, setHoverDate] = useState<{ date: string; count: number } | null>(null);
 
-  if (positions.length === 0) {
+  if (positions.length === 0 && transactions.length === 0) {
     return (
       <div className="p-10 text-center text-slate-500 italic">
         尚未有足夠資料進行分析。
@@ -52,7 +52,12 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     const topWinners = sortedByPL.slice(0, 3).filter(p => p.unrealizedPL > 0);
     const topLosers = [...sortedByPL].reverse().slice(0, 3).filter(p => p.unrealizedPL < 0);
 
-    // Calculate CAGR
+    // 計算總損益 (未實現 + 已實現)
+    const totalNetPL = summary.totalPL + summary.totalRealizedPL;
+    // 總報酬率 (基於目前投入成本)
+    const totalNetPLPercent = summary.totalCost > 0 ? (totalNetPL / summary.totalCost) * 100 : 0;
+
+    // Calculate CAGR (Adjusted to include Realized P&L)
     let annualizedReturn = 0;
     let daysDiff = 0;
     if (transactions.length > 0) {
@@ -62,13 +67,18 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       daysDiff = Math.ceil((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysDiff > 0 && summary.totalCost > 0) {
-        // formula: ((CurrentValue / TotalCost) ^ (365 / days)) - 1
-        const totalMultiplier = summary.totalAssets / summary.totalCost;
-        annualizedReturn = (Math.pow(totalMultiplier, 365 / daysDiff) - 1) * 100;
+        // formula: (( (CurrentValue + RealizedPL) / TotalCost) ^ (365 / days)) - 1
+        // 我們將已實現損益加回資產終值，模擬這些獲利也是產出的一部分
+        const effectiveFinalValue = summary.totalAssets + summary.totalRealizedPL;
+        const totalMultiplier = effectiveFinalValue / summary.totalCost;
+        
+        if (totalMultiplier > 0) {
+             annualizedReturn = (Math.pow(totalMultiplier, 365 / daysDiff) - 1) * 100;
+        }
       }
     }
 
-    return { sortedByPL, topWinners, topLosers, annualizedReturn, daysDiff };
+    return { sortedByPL, topWinners, topLosers, annualizedReturn, daysDiff, totalNetPL, totalNetPLPercent };
   }, [positions, transactions, summary]);
 
   // --- Tab 3: Behavior Logic (Heatmap) ---
@@ -164,47 +174,51 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                     <LayoutGrid size={16} className="text-emerald-400" /> 產業權重
                 </h3>
-                <div className="space-y-4">
-                    {allocationData.sectorList.map(sector => {
-                        const weight = (sector.value / summary.totalAssets) * 100;
-                        return (
-                            <div key={sector.name} className="space-y-1">
-                                <div className="flex justify-between items-end">
-                                    <span className="text-xs font-medium text-slate-300">{sector.name}</span>
-                                    <span className="text-xs font-bold text-white">{weight.toFixed(1)}%</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${weight}%` }} />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                {allocationData.sectorList.length > 0 ? (
+                  <div className="space-y-4">
+                      {allocationData.sectorList.map(sector => {
+                          const weight = summary.totalAssets > 0 ? (sector.value / summary.totalAssets) * 100 : 0;
+                          return (
+                              <div key={sector.name} className="space-y-1">
+                                  <div className="flex justify-between items-end">
+                                      <span className="text-xs font-medium text-slate-300">{sector.name}</span>
+                                      <span className="text-xs font-bold text-white">{weight.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${weight}%` }} />
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+                ) : <div className="text-xs text-slate-500 text-center py-4">無持有部位</div>}
             </section>
 
             <section className="bg-cardBg p-5 rounded-2xl border border-slate-700">
                 <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                     <PieChart size={16} className="text-blue-400" /> 個股持倉分佈
                 </h3>
-                <div className="space-y-4">
-                    {allocationData.sortedByWeight.map(pos => {
-                        const weight = (pos.currentValue / summary.totalAssets) * 100;
-                        return (
-                            <div key={pos.symbol} className="space-y-1">
-                                <div className="flex justify-between items-end">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-medium text-slate-300">{pos.name}</span>
-                                        <span className="text-[9px] text-slate-500">{pos.symbol}</span>
-                                    </div>
-                                    <span className="text-xs font-bold text-white">{weight.toFixed(1)}%</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${weight}%` }} />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                {allocationData.sortedByWeight.length > 0 ? (
+                  <div className="space-y-4">
+                      {allocationData.sortedByWeight.map(pos => {
+                          const weight = summary.totalAssets > 0 ? (pos.currentValue / summary.totalAssets) * 100 : 0;
+                          return (
+                              <div key={pos.symbol} className="space-y-1">
+                                  <div className="flex justify-between items-end">
+                                      <div className="flex flex-col">
+                                          <span className="text-xs font-medium text-slate-300">{pos.name}</span>
+                                          <span className="text-[9px] text-slate-500">{pos.symbol}</span>
+                                      </div>
+                                      <span className="text-xs font-bold text-white">{weight.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${weight}%` }} />
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+                ) : <div className="text-xs text-slate-500 text-center py-4">無持有部位</div>}
             </section>
         </div>
       )}
@@ -219,9 +233,12 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                        <div className="text-[10px] text-slate-500 mb-1">總投報率</div>
-                        <div className={`text-xl font-bold ${getColor(summary.totalPLPercent)}`}>
-                            {summary.totalPLPercent > 0 ? '+' : ''}{summary.totalPLPercent.toFixed(2)}%
+                        <div className="text-[10px] text-slate-500 mb-1">總投報 (含已實現)</div>
+                        <div className={`text-xl font-bold ${getColor(performanceData.totalNetPLPercent)}`}>
+                            {performanceData.totalNetPLPercent > 0 ? '+' : ''}{performanceData.totalNetPLPercent.toFixed(2)}%
+                        </div>
+                        <div className={`text-[10px] font-medium mt-1 ${getColor(performanceData.totalNetPL)} opacity-80`}>
+                            {performanceData.totalNetPL > 0 ? '+' : ''}${performanceData.totalNetPL.toLocaleString()}
                         </div>
                     </div>
                     <div className="bg-black/20 p-4 rounded-2xl border border-white/5 relative overflow-hidden">
@@ -229,6 +246,9 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         <div className="text-[10px] text-slate-500 mb-1">年化報酬 (CAGR)</div>
                         <div className={`text-xl font-bold ${getColor(performanceData.annualizedReturn)}`}>
                             {performanceData.annualizedReturn > 0 ? '+' : ''}{performanceData.annualizedReturn.toFixed(2)}%
+                        </div>
+                         <div className="text-[10px] text-slate-500 opacity-60 mt-1">
+                            含已實現損益
                         </div>
                     </div>
                     <div className="col-span-2 bg-black/20 p-3 rounded-xl border border-white/5 flex justify-between items-center">
@@ -238,11 +258,6 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         </div>
                         <span className="text-sm font-bold text-white">{performanceData.daysDiff} <span className="text-[10px] font-normal text-slate-400">天</span></span>
                     </div>
-                </div>
-                <div className="mt-4 px-1">
-                    <p className="text-[9px] text-slate-500 leading-relaxed italic">
-                        * 年化報酬率反映了複利效果。若您的持有時間短於一年，該數值僅供參考，代表按目前速度發展的預期表現。
-                    </p>
                 </div>
             </section>
 
@@ -258,7 +273,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                 <span className="text-xs font-bold text-twRed">+{Math.round(p.unrealizedPL).toLocaleString()}</span>
                             </div>
                         ))
-                    ) : <div className="text-[10px] text-slate-600 italic">無</div>}
+                    ) : <div className="text-[10px] text-slate-600 italic">無帳面獲利</div>}
                 </div>
                 <div className="bg-cardBg p-4 rounded-2xl border border-slate-700">
                     <h4 className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center gap-1">
@@ -271,37 +286,39 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                 <span className="text-xs font-bold text-twGreen">-{Math.abs(Math.round(p.unrealizedPL)).toLocaleString()}</span>
                             </div>
                         ))
-                    ) : <div className="text-[10px] text-slate-600 italic">無</div>}
+                    ) : <div className="text-[10px] text-slate-600 italic">無帳面虧損</div>}
                 </div>
             </div>
 
             <section className="bg-cardBg p-5 rounded-2xl border border-slate-700">
                 <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                    <BarChart3 size={16} className="text-purple-400" /> 未實現損益排行
+                    <BarChart3 size={16} className="text-purple-400" /> 未實現損益排行 (持倉中)
                 </h3>
-                <div className="space-y-4">
-                    {performanceData.sortedByPL.map(pos => {
-                        const maxAbsPL = Math.max(...positions.map(p => Math.abs(p.unrealizedPL)));
-                        const barWidth = maxAbsPL > 0 ? (Math.abs(pos.unrealizedPL) / maxAbsPL) * 100 : 0;
-                        
-                        return (
-                            <div key={pos.symbol} className="flex items-center gap-3">
-                                <div className="w-16 text-[10px] text-slate-400 truncate">{pos.name}</div>
-                                <div className="flex-1 flex items-center gap-2">
-                                    <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden flex justify-center">
-                                        <div 
-                                            className={`h-full ${getBgColor(pos.unrealizedPL)} rounded-full`}
-                                            style={{ width: `${barWidth}%` }}
-                                        />
-                                    </div>
-                                    <div className={`w-16 text-right text-[10px] font-bold ${getColor(pos.unrealizedPL)}`}>
-                                        {pos.unrealizedPL > 0 ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}
+                {performanceData.sortedByPL.length > 0 ? (
+                    <div className="space-y-4">
+                        {performanceData.sortedByPL.map(pos => {
+                            const maxAbsPL = Math.max(...positions.map(p => Math.abs(p.unrealizedPL)));
+                            const barWidth = maxAbsPL > 0 ? (Math.abs(pos.unrealizedPL) / maxAbsPL) * 100 : 0;
+                            
+                            return (
+                                <div key={pos.symbol} className="flex items-center gap-3">
+                                    <div className="w-16 text-[10px] text-slate-400 truncate">{pos.name}</div>
+                                    <div className="flex-1 flex items-center gap-2">
+                                        <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden flex justify-center">
+                                            <div 
+                                                className={`h-full ${getBgColor(pos.unrealizedPL)} rounded-full`}
+                                                style={{ width: `${barWidth}%` }}
+                                            />
+                                        </div>
+                                        <div className={`w-16 text-right text-[10px] font-bold ${getColor(pos.unrealizedPL)}`}>
+                                            {pos.unrealizedPL > 0 ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+                ) : <div className="text-xs text-slate-500 text-center py-4">無持有部位</div>}
             </section>
         </div>
       )}
@@ -392,22 +409,24 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-1.5">
                             <Target size={14} className="text-blue-400" /> 安全邊際 (市價 vs 成本)
                         </h4>
-                        <div className="space-y-3">
-                            {insightsData.costGapList.slice(0, 5).map(item => (
-                                <div key={item.name} className="flex items-center gap-2">
-                                    <span className="text-[10px] text-slate-400 w-16 truncate">{item.name}</span>
-                                    <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
-                                        <div 
-                                            className={`h-full ${item.gap >= 0 ? 'bg-blue-500' : 'bg-slate-600'}`}
-                                            style={{ width: `${Math.min(100, Math.abs(item.gap))}%` }}
-                                        />
+                        {insightsData.costGapList.length > 0 ? (
+                            <div className="space-y-3">
+                                {insightsData.costGapList.slice(0, 5).map(item => (
+                                    <div key={item.name} className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-400 w-16 truncate">{item.name}</span>
+                                        <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
+                                            <div 
+                                                className={`h-full ${item.gap >= 0 ? 'bg-blue-500' : 'bg-slate-600'}`}
+                                                style={{ width: `${Math.min(100, Math.abs(item.gap))}%` }}
+                                            />
+                                        </div>
+                                        <span className={`text-[10px] font-bold ${getColor(item.gap)} w-12 text-right`}>
+                                            {item.gap > 0 ? '+' : ''}{item.gap.toFixed(1)}%
+                                        </span>
                                     </div>
-                                    <span className={`text-[10px] font-bold ${getColor(item.gap)} w-12 text-right`}>
-                                        {item.gap > 0 ? '+' : ''}{item.gap.toFixed(1)}%
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        ) : <div className="text-xs text-slate-500 italic">無資料</div>}
                     </div>
                 </div>
             </section>
@@ -420,7 +439,9 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                     ) : (
                         "您的投資組合分散程度良好，具有較佳的抗波動能力。"
                     )}
-                    目前最大潛在獲利股為 <span className="text-white font-bold">{insightsData.costGapList[0]?.name}</span>。
+                    {insightsData.costGapList.length > 0 && (
+                        <span>目前最大潛在獲利股為 <span className="text-white font-bold">{insightsData.costGapList[0]?.name}</span>。</span>
+                    )}
                 </div>
             </section>
         </div>
