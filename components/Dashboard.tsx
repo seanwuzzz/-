@@ -38,7 +38,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                    <div className="text-[10px] text-slate-500 mb-1">未實現損益</div>
+                    <div className="text-[10px] text-slate-500 mb-1">未實現損益 <span className="text-[8px] opacity-60">(含費用)</span></div>
                     <div className={`text-lg font-bold ${getColor(summary.totalPL)} flex flex-col leading-tight`}>
                         <span>{summary.totalPL > 0 ? '+' : ''}{summary.totalPL.toLocaleString()}</span>
                         <span className="text-[11px] mt-1 opacity-80 font-medium tracking-wide">
@@ -55,7 +55,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
             </div>
             
             <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex justify-between items-center">
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider">已實現損益 (Realized P/L)</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider">已實現損益 <span className="text-[8px] opacity-60">已含交易成本</span></div>
                 <div className={`text-sm font-bold ${getColor(summary.totalRealizedPL)}`}>
                     {summary.totalRealizedPL > 0 ? '+' : ''}{summary.totalRealizedPL.toLocaleString()}
                 </div>
@@ -93,7 +93,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                                     <Hash size={10} /> {pos.sector}
                                 </span>
                                 <span className="text-[10px] text-slate-400">
-                                    {pos.shares.toLocaleString()} 股 • 均價 {pos.avgCost.toFixed(1)}
+                                    {pos.shares.toLocaleString()} 股 • 均費成本 {pos.avgCost.toFixed(1)}
                                 </span>
                             </div>
                         </div>
@@ -113,7 +113,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                     
                     <div className="flex justify-between items-end">
                          <div className="text-[10px] text-slate-500">
-                            市值 ${pos.currentValue.toLocaleString()}
+                            總市值 ${pos.currentValue.toLocaleString()}
                          </div>
                          <div className="text-right">
                             <div className={`text-sm font-bold ${getColor(pos.unrealizedPL)}`}>

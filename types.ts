@@ -11,6 +11,7 @@ export interface Transaction {
 
 export interface ProcessedTransaction extends Transaction {
   realizedPL?: number;
+  totalAmount: number; // 實際收付金額 (買進加計費用, 賣出扣除費用)
 }
 
 export interface StockPrice {
@@ -52,6 +53,7 @@ export interface StockNews {
   url: string;
   source: string;
   date?: string;
+  _ts?: number;
 }
 
 export interface AppSettings {

@@ -1,9 +1,9 @@
 import { Transaction, StockPrice } from './types';
 
-export const APP_VERSION = "v1.4.2 (HORIZONTAL-HEATMAP)";
+export const APP_VERSION = "v1.7.3 (RSS-CLEAN)";
 
 export const DEMO_PRICES: StockPrice[] = [
-  { symbol: '2330', price: 780, changePercent: 1.5, name: '台績電', sector: '半導體' },
+  { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體' },
   { symbol: '2317', price: 145, changePercent: -0.5, name: '鴻海', sector: '電子代工' },
   { symbol: '0050', price: 160, changePercent: 0.8, name: '元大台灣50', sector: 'ETF' },
   { symbol: '2454', price: 950, changePercent: 2.1, name: '聯發科', sector: 'IC設計' },
@@ -17,45 +17,150 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 /**
- * Google Apps Script 後端程式碼
- * 功能：資料存取、強制刷新、以及免費新聞 RSS 抓取。
+ * Google Apps Script 後端程式碼 v1.7.3
+ * 更新：強化文字清理 (cleanText)，修復 HTML 實體編碼錯誤，改進標題切割邏輯。
  */
 
 function doGet(e) {
   var action = e.parameter.action;
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var priceSheet = ss.getSheetByName("Prices");
-  var txSheet = ss.getSheetByName("Transactions");
   
+  // --- GET_NEWS (Google News RSS) ---
   if (action === "GET_NEWS") {
     var symbol = e.parameter.symbol;
     var name = e.parameter.name || "";
-    var query = encodeURIComponent(symbol + " " + name + " 股票 新聞");
-    var url = "https://news.google.com/rss/search?q=" + query + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
+    
+    // 文字清理工具：去除 HTML 標籤並解碼常見實體
+    var cleanText = function(str) {
+      if (!str) return "";
+      return str.replace(/<[^>]+>/g, " ")     // 移除 HTML 標籤
+                .replace(/&nbsp;/g, " ")      // 空格
+                .replace(/&quot;/g, '"')      // 雙引號
+                .replace(/&apos;/g, "'")      // 單引號
+                .replace(/&#39;/g, "'")       // 單引號
+                .replace(/&amp;/g, "&")       // & 符號 (最後處理)
+                .replace(/\\s+/g, " ")         // 合併多餘空白
+                .trim();
+    };
+
+    var fetchItems = function(queryStr) {
+      var rssUrl = "https://news.google.com/rss/search?q=" + encodeURIComponent(queryStr) + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
+      try {
+        var response = UrlFetchApp.fetch(rssUrl, { muteHttpExceptions: true });
+        if (response.getResponseCode() !== 200) return [];
+        var xml = response.getContentText();
+        var document = XmlService.parse(xml);
+        var root = document.getRootElement();
+        var channel = root.getChild("channel");
+        return channel.getChildren("item");
+      } catch (err) {
+        return [];
+      }
+    };
+
+    // 1. 優先嘗試：名稱 + 代號
+    var items = fetchItems(name + " " + symbol);
+    
+    // 2. 備援機制：查無資料則僅用代號
+    if (!items || items.length === 0) {
+       items = fetchItems(symbol);
+    }
+    
+    var newsList = [];
     
     try {
-      var response = UrlFetchApp.fetch(url);
-      var xml = response.getContentText();
-      var items = xml.split("<item>").slice(1, 5); 
-      var news = items.map(function(item) {
-        var titleMatch = item.match(/<title>(.*?)<\/title>/);
-        var linkMatch = item.match(/<link>(.*?)<\/link>/);
-        var sourceMatch = item.match(/<source.*?>(.*?)<\/source>/);
+      for (var i = 0; i < Math.min(items.length, 10); i++) {
+        var item = items[i];
         
-        return {
-          title: titleMatch ? titleMatch[1].replace("<![CDATA[", "").replace("]]>", "") : "無標題",
-          url: linkMatch ? linkMatch[1] : "#",
-          source: sourceMatch ? sourceMatch[1] : "新聞來源",
-          snippet: "點擊查看詳細內容...",
-          date: "最新"
-        };
-      });
-      return ContentService.createTextOutput(JSON.stringify(news)).setMimeType(ContentService.MimeType.JSON);
+        // 讀取原始資料
+        var rawTitle = item.getChildText("title"); 
+        var link = item.getChildText("link");
+        var pubDateStr = item.getChildText("pubDate");
+        var rawDesc = item.getChildText("description") || "";
+        var sourceElem = item.getChild("source");
+        
+        // 解析來源
+        var source = sourceElem ? cleanText(sourceElem.getText()) : "";
+        
+        // 解析標題：Google RSS 標題通常是 "新聞標題 - 媒體名稱"
+        // 我們使用 lastIndexOf 來確保只切除最後一個 " - "，避免標題內有破折號被誤切
+        var title = cleanText(rawTitle);
+        var lastDashIndex = title.lastIndexOf(" - ");
+        
+        if (lastDashIndex !== -1) {
+            // 嘗試分離出媒體名稱
+            var potentialSource = title.substring(lastDashIndex + 3).trim();
+            var potentialTitle = title.substring(0, lastDashIndex).trim();
+            
+            // 如果 <source> 標籤抓不到，或抓到的跟標題尾端差不多，就使用標題尾端當來源
+            if (!source || potentialSource.indexOf(source) !== -1 || source.indexOf(potentialSource) !== -1) {
+                source = potentialSource;
+            }
+            title = potentialTitle;
+        }
+
+        // 解析摘要：Description 常常是一團亂的 HTML
+        var snippet = cleanText(rawDesc);
+        
+        // 過濾無意義的摘要
+        // 1. 如果摘要跟標題高度重複
+        if (snippet.indexOf(title) !== -1) {
+             snippet = snippet.replace(title, "").trim();
+        }
+        // 2. 如果摘要只是媒體名稱或包含 "Google News"
+        if (snippet === source || snippet.indexOf("Google News") !== -1 || snippet.indexOf("View Full Coverage") !== -1) {
+            snippet = ""; // 清空，前端會隱藏或不顯示
+        }
+        // 3. 截斷過長摘要
+        if (snippet.length > 100) {
+            snippet = snippet.substring(0, 100) + "...";
+        }
+
+        // 格式化日期
+        var pubDate = new Date(pubDateStr);
+        var ts = pubDate.getTime();
+        var now = new Date();
+        var diffMs = now - pubDate;
+        var diffMins = Math.floor(diffMs / 60000);
+        var diffHrs = Math.floor(diffMs / 3600000);
+        var dateDisplay = "";
+        
+        if (diffMins < 60) {
+           dateDisplay = diffMins + " 分鐘前";
+        } else if (diffHrs < 24) {
+           dateDisplay = diffHrs + " 小時前";
+        } else {
+           dateDisplay = (pubDate.getMonth() + 1) + "/" + pubDate.getDate();
+        }
+
+        newsList.push({
+          title: title,
+          url: link,
+          source: source || "Google News",
+          snippet: snippet,
+          date: dateDisplay,
+          _ts: ts
+        });
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify(newsList)).setMimeType(ContentService.MimeType.JSON);
+      
     } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify([{
+         title: "解析錯誤", 
+         snippet: err.toString(), 
+         url: "#", 
+         source: "System",
+         _ts: 0
+       }])).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
+  // --- 原有的 Spreadsheet 邏輯 ---
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var priceSheet = ss.getSheetByName("Prices");
+  var txSheet = ss.getSheetByName("Transactions");
+
+  // REFRESH
   if (action === "REFRESH") {
     if (priceSheet && priceSheet.getLastRow() > 1) {
       var lastRow = priceSheet.getLastRow();
@@ -69,20 +174,12 @@ function doGet(e) {
     }
   }
   
+  // GET_DATA
   var txData = [];
   if (txSheet && txSheet.getLastRow() > 1) {
     var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
     txData = rows.map(function(r) {
-      return {
-        id: String(r[0]),
-        date: r[1], 
-        type: r[2], 
-        stockSymbol: String(r[3]), 
-        stockName: r[4], 
-        shares: r[5], 
-        pricePerShare: r[6], 
-        fees: r[7]
-      };
+      return { id: String(r[0]), date: r[1], type: r[2], stockSymbol: String(r[3]), stockName: r[4], shares: r[5], pricePerShare: r[6], fees: r[7] };
     });
   }
 
@@ -90,13 +187,8 @@ function doGet(e) {
   if (priceSheet && priceSheet.getLastRow() > 1) {
     var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 4).getValues();
     quotes = pRows.map(function(row) {
-      return {
-        symbol: String(row[0]).trim(),
-        price: Number(row[1]),
-        changePercent: Number(row[2]),
-        sector: String(row[3] || "未分類")
-      };
-    }).filter(q => q.symbol !== "");
+      return { symbol: String(row[0]).trim(), price: Number(row[1]), changePercent: Number(row[2]), sector: String(row[3] || "未分類") };
+    }).filter(function(q) { return q.symbol !== ""; });
   }
 
   return ContentService.createTextOutput(JSON.stringify({
@@ -136,9 +228,9 @@ function doPost(e) {
   if (!exists) {
     var nextRow = priceSheet.getLastRow() + 1;
     priceSheet.getRange(nextRow, 1).setValue("'" + cleanSymbol);
-    priceSheet.getRange(nextRow, 2).setFormula('=GOOGLEFINANCE(A' + nextRow + ', "price")');
-    priceSheet.getRange(nextRow, 3).setFormula('=GOOGLEFINANCE(A' + nextRow + ', "changepct")/100');
-    priceSheet.getRange(nextRow, 4).setValue("未分類");
+    priceSheet.getRange(nextRow, 2).setFormula('=GET_TW_PRICE(A' + nextRow + ')');
+    priceSheet.getRange(nextRow, 3).setFormula('=GET_STOCK_CHANGE(A' + nextRow + ')');
+    priceSheet.getRange(nextRow, 4).setFormula('=getStockSector(A' + nextRow + ')');
   }
   
   return createResponse("success");

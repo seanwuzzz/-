@@ -27,28 +27,39 @@ export const calculatePortfolio = (
       dayChangePercent: 0,
       dayChangeAmount: 0,
       realizedPL: 0,
-      sector: '未分類' // Default sector
+      sector: '未分類'
     };
 
     if (tx.name) current.name = tx.name;
 
-    const processedTx: ProcessedTransaction = { ...tx };
+    // 計算此筆交易的實際現金流 (成交額)
+    const netTransactionAmount = tx.type === 'BUY' 
+      ? (tx.shares * tx.price) + tx.fee  // 買進：支出 = 成交額 + 手續費
+      : (tx.shares * tx.price) - tx.fee; // 賣出：拿回 = 成交額 - 手續費
+
+    const processedTx: ProcessedTransaction = { 
+      ...tx, 
+      totalAmount: netTransactionAmount 
+    };
 
     if (tx.type === 'BUY') {
       current.shares += tx.shares;
-      current.totalCost += (tx.shares * tx.price) + tx.fee;
+      // 累加總成本 (包含買進手續費)
+      current.totalCost += netTransactionAmount;
       current.avgCost = current.shares > 0 ? current.totalCost / current.shares : 0;
     } else {
       if (current.shares > 0) {
+        // 以目前的含費平均成本計算賣出部分的成本
         const costOfSoldShares = current.avgCost * tx.shares;
-        const proceeds = (tx.shares * tx.price) - tx.fee;
-        const gainLoss = proceeds - costOfSoldShares;
+        // 實際賣出損益 = 賣出淨拿回 - 買進含費成本
+        const gainLoss = netTransactionAmount - costOfSoldShares;
         
         current.realizedPL += gainLoss;
         totalRealizedPL += gainLoss;
         processedTx.realizedPL = gainLoss;
 
         current.shares -= tx.shares;
+        // 更新剩餘持股的總成本
         current.totalCost = current.shares * current.avgCost;
       }
     }
@@ -78,7 +89,6 @@ export const calculatePortfolio = (
     const currentPrice = priceData ? priceData.price : 0;
     const changePct = priceData ? priceData.changePercent : 0;
     
-    // Update sector from latest price table info
     if (priceData && priceData.sector) {
       pos.sector = priceData.sector;
     }
@@ -86,7 +96,9 @@ export const calculatePortfolio = (
     if (pos.shares > 0) {
       pos.currentPrice = currentPrice;
       pos.currentValue = pos.shares * currentPrice;
+      // 未實現損益 = 目前市值 - 含買進費用的總成本
       pos.unrealizedPL = pos.currentValue - pos.totalCost;
+      // 未實現報酬率 = (未實現損益 / 含買進費用的總成本) * 100
       pos.unrealizedPLPercent = pos.totalCost > 0 ? (pos.unrealizedPL / pos.totalCost) * 100 : 0;
       pos.dayChangePercent = changePct;
       pos.dayChangeAmount = currentPrice * (changePct / 100) * pos.shares;
@@ -99,6 +111,7 @@ export const calculatePortfolio = (
     }
   });
 
+  // 總報酬率同樣以「總投入成本(含費)」為基準
   summary.totalPL = summary.totalAssets - summary.totalCost;
   summary.totalPLPercent = summary.totalCost > 0 ? (summary.totalPL / summary.totalCost) * 100 : 0;
 

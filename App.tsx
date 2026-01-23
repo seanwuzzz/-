@@ -46,8 +46,27 @@ function App() {
     let scriptUrl = currentSettings.googleScriptUrl?.trim();
     if (!scriptUrl) return;
 
-    if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
-        scriptUrl = scriptUrl.replace(/\/$/, '') + '/exec';
+    // Robust URL cleaning
+    try {
+        // Remove trailing slashes
+        scriptUrl = scriptUrl.replace(/\/+$/, '');
+
+        // Handle editor URLs (e.g. .../edit#gid=0)
+        if (scriptUrl.includes('/edit')) {
+            scriptUrl = scriptUrl.split('/edit')[0];
+        }
+        
+        // Handle dev deployments
+        if (scriptUrl.endsWith('/dev')) {
+            scriptUrl = scriptUrl.slice(0, -4);
+        }
+
+        // Ensure it ends with /exec if it's not already there (and not a query param)
+        if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
+            scriptUrl = scriptUrl + '/exec';
+        }
+    } catch (e) {
+        console.error("URL parsing error", e);
     }
 
     setLoading(true);
@@ -57,8 +76,22 @@ function App() {
         const action = isManualRefresh ? 'REFRESH' : 'GET_DATA';
         const url = `${scriptUrl}${separator}action=${action}&t=${timestamp}`;
         
-        const response = await fetch(url, { method: 'GET', cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        // Added mode: 'cors' and redirect: 'follow' explicitly
+        const response = await fetch(url, { 
+            method: 'GET', 
+            mode: 'cors',
+            redirect: 'follow',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8',
+            }
+        });
+        
+        if (!response.ok) {
+            // Try to read error text if available
+            const errText = await response.text().catch(() => response.statusText);
+            throw new Error(`HTTP ${response.status}: ${errText}`);
+        }
+        
         const data = await response.json();
         
         if (data.transactions) {
@@ -88,6 +121,10 @@ function App() {
         setLastUpdated(new Date());
     } catch (error) {
         console.error("Fetch error details:", error);
+        // Optional: show a toast or alert here if needed, but for now we rely on console
+        if (isManualRefresh) {
+            alert("更新失敗，請檢查網址或網路連線。\n" + (error instanceof Error ? error.message : String(error)));
+        }
     } finally {
         setLoading(false);
     }
@@ -121,13 +158,34 @@ function App() {
         let news: StockNews[] = [];
         if (settings.useDemoData || !settings.googleScriptUrl) {
             await new Promise(r => setTimeout(r, 600)); 
-            news = [{ title: `[範例] ${symbol} ${stockName} 市場即時報`, source: "範例時報", url: "#", snippet: "範例資料模式不支援即時 RSS 抓取...", date: "今日" }];
+            news = [
+                { title: `[範例] ${symbol} ${stockName} 市場即時報`, source: "範例時報", url: "#", snippet: "範例模式僅顯示此條預設訊息。", date: "剛剛", _ts: Date.now() }
+            ];
         } else {
-            const scriptUrl = settings.googleScriptUrl;
+            let scriptUrl = settings.googleScriptUrl.trim();
+            
+            // Same robust URL cleaning for news fetch
+            scriptUrl = scriptUrl.replace(/\/+$/, '');
+            if (scriptUrl.includes('/edit')) scriptUrl = scriptUrl.split('/edit')[0];
+            if (scriptUrl.endsWith('/dev')) scriptUrl = scriptUrl.slice(0, -4);
+            if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
+                scriptUrl = scriptUrl + '/exec';
+            }
+
             const separator = scriptUrl.includes('?') ? '&' : '?';
             const url = `${scriptUrl}${separator}action=GET_NEWS&symbol=${symbol}&name=${encodeURIComponent(stockName)}`;
-            const response = await fetch(url);
-            news = await response.json();
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                mode: 'cors',
+                redirect: 'follow'
+            });
+
+            if (!response.ok) throw new Error("Backend News Error");
+            const rawNews: StockNews[] = await response.json();
+            
+            // 後端已經回傳 Top 5 並轉換過時間戳記
+            news = rawNews.sort((a, b) => (b._ts || 0) - (a._ts || 0));
         }
         newsCache.current[symbol] = news;
         setStockNews(news);
@@ -146,15 +204,26 @@ function App() {
         setActiveTab(Tab.HOME);
         return;
     }
+    
+    let scriptUrl = settings.googleScriptUrl.trim();
+    // Same robust URL cleaning for post
+    scriptUrl = scriptUrl.replace(/\/+$/, '');
+    if (scriptUrl.includes('/edit')) scriptUrl = scriptUrl.split('/edit')[0];
+    if (scriptUrl.endsWith('/dev')) scriptUrl = scriptUrl.slice(0, -4);
+    if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
+        scriptUrl = scriptUrl + '/exec';
+    }
+
     try {
-        await fetch(settings.googleScriptUrl, {
+        await fetch(scriptUrl, {
             method: 'POST',
-            mode: 'no-cors',
+            mode: 'no-cors', // POST to GAS often uses no-cors due to redirect handling limitations in some browsers, but user should check if this is the issue
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...newTx, id: newId, stockSymbol: newTx.symbol, stockName: newTx.name, pricePerShare: newTx.price, fees: newTx.fee })
         });
         setTransactions(prev => [...prev, { ...newTx, id: newId }]);
         setActiveTab(Tab.HOME);
-        setTimeout(() => fetchData(undefined, false), 1000);
+        setTimeout(() => fetchData(undefined, false), 1500); // Increased delay slightly
     } catch (e) { console.error(e); }
   };
 
@@ -163,21 +232,38 @@ function App() {
         setTransactions(prev => prev.filter(t => t.id !== id));
         return;
     }
+
+    let scriptUrl = settings.googleScriptUrl.trim();
+    // Same robust URL cleaning
+    scriptUrl = scriptUrl.replace(/\/+$/, '');
+    if (scriptUrl.includes('/edit')) scriptUrl = scriptUrl.split('/edit')[0];
+    if (scriptUrl.endsWith('/dev')) scriptUrl = scriptUrl.slice(0, -4);
+    if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
+        scriptUrl = scriptUrl + '/exec';
+    }
+
     try {
-        await fetch(settings.googleScriptUrl, {
+        await fetch(scriptUrl, {
             method: 'POST',
             mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'DELETE', id })
         });
         setTransactions(prev => prev.filter(t => t.id !== id));
-        setTimeout(() => fetchData(undefined, false), 1000);
+        setTimeout(() => fetchData(undefined, false), 1500);
     } catch (e) { console.error(e); }
   };
 
   const handleSaveSettings = (newSettings: AppSettings) => {
     let url = newSettings.googleScriptUrl?.trim() || '';
-    if (url.includes('script.google.com') && !url.endsWith('/exec') && !url.includes('/exec?')) {
-        url = url.replace(/\/$/, '') + '/exec';
+    // Apply cleaning immediately on save
+    if (url) {
+        url = url.replace(/\/+$/, '');
+        if (url.includes('/edit')) url = url.split('/edit')[0];
+        if (url.endsWith('/dev')) url = url.slice(0, -4);
+        if (url.includes('script.google.com') && !url.endsWith('/exec') && !url.includes('/exec?')) {
+            url = url + '/exec';
+        }
     }
     const cleanedSettings = { ...newSettings, googleScriptUrl: url };
     setSettings(cleanedSettings);

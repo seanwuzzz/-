@@ -19,6 +19,12 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     fee: '20'
   });
 
+  const handleSymbolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 僅允許數字與英文字母，並自動轉大寫
+    const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    setFormData({ ...formData, symbol: val });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.symbol || !formData.shares || !formData.price || !formData.name) return;
@@ -27,7 +33,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     try {
         await onAdd({
             date: formData.date,
-            symbol: formData.symbol.trim(), // Keep exact string for 0050
+            symbol: formData.symbol.trim(),
             name: formData.name,
             type: formData.type,
             shares: Number(formData.shares),
@@ -63,10 +69,9 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 <input
                     type="text"
                     required
-                    inputMode="numeric"
-                    placeholder="例如: 0050"
+                    placeholder="例如: 2330"
                     value={formData.symbol}
-                    onChange={e => setFormData({...formData, symbol: e.target.value})}
+                    onChange={handleSymbolChange}
                     className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
                 />
             </div>

@@ -15,7 +15,8 @@ import {
   ExternalLink,
   Loader2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Clock
 } from 'lucide-react';
 
 interface Props {
@@ -53,7 +54,6 @@ const HistoryList: React.FC<Props> = ({
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Reset expand state when filter changes
   useEffect(() => {
     setIsNewsExpanded(false);
   }, [filterSymbol]);
@@ -95,9 +95,7 @@ const HistoryList: React.FC<Props> = ({
         if (sortField === 'date') {
             comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
         } else if (sortField === 'amount') {
-            const amountA = a.shares * a.price;
-            const amountB = b.shares * b.price;
-            comparison = amountA - amountB;
+            comparison = a.totalAmount - b.totalAmount;
         }
         return sortOrder === 'desc' ? -comparison : comparison;
     });
@@ -111,14 +109,13 @@ const HistoryList: React.FC<Props> = ({
             {filterSymbol ? `${filterSymbol} 詳情` : '交易紀錄'}
         </h2>
         
-        {/* Filter Controls */}
         <div className="flex flex-col gap-3 mt-4">
             <div className="flex items-center justify-center gap-2">
                 <button onClick={() => handleSort('date')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${sortField === 'date' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
                     <CalendarDays size={14} /> 日期 {sortField === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
                 </button>
                 <button onClick={() => handleSort('amount')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${sortField === 'amount' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                    <CircleDollarSign size={14} /> 金額 {sortField === 'amount' && (sortOrder === 'desc' ? '↓' : '↑')}
+                    <CircleDollarSign size={14} /> 成交淨額 {sortField === 'amount' && (sortOrder === 'desc' ? '↓' : '↑')}
                 </button>
             </div>
             {filterSymbol && (
@@ -131,7 +128,6 @@ const HistoryList: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* News Section (Collapsed by default) */}
       {filterSymbol && (
         <section className="bg-slate-800/40 rounded-3xl border border-slate-700/50 mb-6 overflow-hidden transition-all duration-300">
             <button 
@@ -157,7 +153,7 @@ const HistoryList: React.FC<Props> = ({
                         </div>
                     ) : news.length > 0 ? (
                         <div className="space-y-3 pt-2">
-                            {news.map((item, idx) => (
+                            {news.slice(0, 3).map((item, idx) => (
                                 <a 
                                     key={idx} 
                                     href={item.url} 
@@ -166,7 +162,14 @@ const HistoryList: React.FC<Props> = ({
                                     className="block bg-slate-900/50 p-3 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors group"
                                 >
                                     <div className="flex justify-between items-start gap-2 mb-1">
-                                        <span className="text-[10px] font-bold text-blue-400 uppercase">{item.source}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-blue-400 uppercase">{item.source}</span>
+                                            {item.date && (
+                                                <span className="flex items-center gap-1 text-[8px] text-slate-500 font-mono mt-0.5">
+                                                    <Clock size={8} /> {item.date}
+                                                </span>
+                                            )}
+                                        </div>
                                         <ExternalLink size={10} className="text-slate-600 group-hover:text-blue-400" />
                                     </div>
                                     <h4 className="text-xs font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-200">{item.title}</h4>
@@ -182,54 +185,55 @@ const HistoryList: React.FC<Props> = ({
         </section>
       )}
 
-      {/* Transactions List */}
       <div className="space-y-3">
         {sortedTransactions.length === 0 ? (
             <div className="text-center py-10 text-slate-500 text-sm italic">尚無符合條件的交易紀錄。</div>
         ) : (
-            sortedTransactions.map((tx) => (
-                <div key={tx.id} className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm relative transition-all">
-                  <div className="absolute -top-1 -right-1 z-10 flex gap-1">
-                      {confirmingId === tx.id ? (
-                          <>
-                              <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }} className="p-2.5 bg-slate-700 text-white rounded-full shadow-xl border border-slate-600"><X size={16} /></button>
-                              <button type="button" disabled={isDeleting} onClick={(e) => handleDeleteClick(e, tx.id)} className="flex items-center gap-1 px-3 py-2.5 bg-twRed text-white font-bold rounded-full shadow-xl border border-twRed/50 animate-pulse"><Check size={16} /><span className="text-xs">確定？</span></button>
-                          </>
-                      ) : (
-                          <button type="button" onClick={(e) => handleDeleteClick(e, tx.id)} className="p-2.5 bg-slate-800 text-slate-400 hover:text-twRed hover:bg-slate-700 transition-all border border-slate-600 rounded-full shadow-sm"><Trash2 size={16} /></button>
-                      )}
-                  </div>
-                  <div className={`transition-opacity ${confirmingId === tx.id ? 'opacity-30' : 'opacity-100'}`}>
-                      <div className="flex justify-between items-start mb-2 pr-6">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${tx.type === 'BUY' ? 'bg-twRed/20 text-twRed' : 'bg-twGreen/20 text-twGreen'}`}>{tx.type === 'BUY' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}</div>
-                          <div>
-                              <div className="flex items-center gap-2">
-                                  <span className="font-bold text-white">{tx.symbol}</span>
-                                  <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">{tx.name}</span>
-                              </div>
-                              <div className="text-[10px] text-slate-500 mt-0.5">{tx.date} • {tx.type === 'BUY' ? '買進' : '賣出'}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-bold text-white">{tx.shares.toLocaleString()} 股</div>
-                          <div className="text-[10px] text-slate-400">單價 ${tx.price.toLocaleString()}</div>
-                        </div>
+            sortedTransactions.map((tx) => {
+                return (
+                    <div key={tx.id} className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm relative transition-all">
+                      <div className="absolute -top-1 -right-1 z-10 flex gap-1">
+                          {confirmingId === tx.id ? (
+                              <>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }} className="p-2.5 bg-slate-700 text-white rounded-full shadow-xl border border-slate-600"><X size={16} /></button>
+                                  <button type="button" disabled={isDeleting} onClick={(e) => handleDeleteClick(e, tx.id)} className="flex items-center gap-1 px-3 py-2.5 bg-twRed text-white font-bold rounded-full shadow-xl border border-twRed/50 animate-pulse"><Check size={16} /><span className="text-xs">確定？</span></button>
+                              </>
+                          ) : (
+                              <button type="button" onClick={(e) => handleDeleteClick(e, tx.id)} className="p-2.5 bg-slate-800 text-slate-400 hover:text-twRed hover:bg-slate-700 transition-all border border-slate-600 rounded-full shadow-sm"><Trash2 size={16} /></button>
+                          )}
                       </div>
-                      <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-700/50">
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500"><Tag size={12} /> 手續費: ${tx.fee}</div>
-                          <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-500">成交額: ${(tx.shares * tx.price).toLocaleString()}</span>
-                              {tx.realizedPL !== undefined && (
-                                  <div className={`text-xs font-bold px-3 py-1 rounded-full ${getBgColor(tx.realizedPL)} ${getColor(tx.realizedPL)}`}>
-                                      {tx.realizedPL >= 0 ? '獲利' : '虧損'} ${Math.abs(Math.round(tx.realizedPL)).toLocaleString()}
+                      <div className={`transition-opacity ${confirmingId === tx.id ? 'opacity-30' : 'opacity-100'}`}>
+                          <div className="flex justify-between items-start mb-2 pr-6">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${tx.type === 'BUY' ? 'bg-twRed/20 text-twRed' : 'bg-twGreen/20 text-twGreen'}`}>{tx.type === 'BUY' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}</div>
+                              <div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="font-bold text-white">{tx.symbol}</span>
+                                      <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">{tx.name}</span>
                                   </div>
-                              )}
+                                  <div className="text-[10px] text-slate-500 mt-0.5">{tx.date} • {tx.type === 'BUY' ? '買進' : '賣出'}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-white">{tx.shares.toLocaleString()} 股</div>
+                              <div className="text-[10px] text-slate-400">成交單價 ${tx.price.toLocaleString()}</div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-700/50">
+                              <div className="flex items-center gap-1 text-[10px] text-slate-500"><Tag size={12} /> 手續費: ${tx.fee}</div>
+                              <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-slate-500">{tx.type === 'BUY' ? '總支出' : '總拿回'}: ${tx.totalAmount.toLocaleString()}</span>
+                                  {tx.realizedPL !== undefined && (
+                                      <div className={`text-xs font-bold px-3 py-1 rounded-full ${getBgColor(tx.realizedPL)} ${getColor(tx.realizedPL)}`}>
+                                          {tx.realizedPL >= 0 ? '淨利' : '淨損'} ${Math.abs(Math.round(tx.realizedPL)).toLocaleString()}
+                                      </div>
+                                  )}
+                              </div>
                           </div>
                       </div>
-                  </div>
-                </div>
-            ))
+                    </div>
+                );
+            })
         )}
       </div>
     </div>
