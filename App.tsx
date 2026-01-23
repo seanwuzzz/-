@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, StockPrice, AppSettings, Tab, StockNews } from './types';
 import { DEMO_PRICES, DEMO_TRANSACTIONS } from './constants';
 import { calculatePortfolio } from './services/portfolioService';
+import { getStockNews } from './services/geminiService';
 import Dashboard from './components/Dashboard';
 import AddTransaction from './components/AddTransaction';
 import Settings from './components/Settings';
@@ -55,7 +56,6 @@ function App() {
     try {
         const timestamp = new Date().getTime();
         const separator = scriptUrl.includes('?') ? '&' : '?';
-        // 只有手動刷新時才傳送 action=REFRESH 觸發 GAS 重寫公式
         const action = isManualRefresh ? 'REFRESH' : 'GET_DATA';
         const url = `${scriptUrl}${separator}action=${action}&t=${timestamp}`;
         
@@ -95,9 +95,8 @@ function App() {
         setLastUpdated(new Date());
     } catch (error) {
         console.error("Fetch error details:", error);
-        // 如果是 Failed to fetch，通常是 CORS 或 URL 錯誤
-        if (error instanceof Error && error.message === 'Failed to fetch') {
-            alert("連線失敗！請確認：\n1. Google Script 已部署為「網頁應用程式」。\n2. 存取權限已設為「任何人」(Anyone)。\n3. URL 是否正確以 /exec 結尾。");
+        if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+            alert("連線失敗！請確認：\n1. Google Script 已部署為「網頁應用程式」。\n2. 存取權限已設為「任何人」(Anyone)。\n3. URL 正確以 /exec 結尾。");
         }
     } finally {
         setLoading(false);
@@ -107,10 +106,12 @@ function App() {
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
-        fetchData(undefined, false); // 背景自動同步不觸發重寫公式
+        fetchData(undefined, false);
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [settings.googleScriptUrl, settings.useDemoData]);
+
+  const { positions, summary, processedTransactions } = calculatePortfolio(transactions, prices);
 
   const handleStockDrillDown = async (symbol: string) => {
     setFilterSymbol(symbol);
@@ -126,17 +127,18 @@ function App() {
     setNewsLoading(true);
     
     try {
+        const stockPos = positions.find(p => p.symbol === symbol);
+        const stockName = stockPos ? stockPos.name : '';
+        
         let news: StockNews[] = [];
-        if (settings.useDemoData || !settings.googleScriptUrl) {
+        if (settings.useDemoData) {
             await new Promise(r => setTimeout(r, 600)); 
             news = [
-                { title: `${symbol} 營收創新高，法人看好後市`, source: "工商時報", url: "#", snippet: "受惠於全球需求強勁，該公司上月營收表現優於預期...", date: "今日" },
-                { title: `${symbol} 除息在即，投資人關注填息力道`, source: "經濟日報", url: "#", snippet: "即將進行年度除息，殖利率表現優異吸引買盤進駐...", date: "昨日" },
-                { title: `台股盤中震盪，${symbol} 展現抗跌韌性`, source: "中央社", url: "#", snippet: "今日大盤走弱，但該股在支撐位表現穩定，吸引長線資金...", date: "前日" }
+                { title: `${symbol} ${stockName} 營收創新高`, source: "範例時報", url: "#", snippet: "這是一則範例新聞內容...", date: "今日" }
             ];
         } else {
-            const response = await fetch(`${settings.googleScriptUrl}${settings.googleScriptUrl.includes('?') ? '&' : '?'}action=GET_NEWS&symbol=${symbol}`);
-            news = await response.json();
+            // 直接調用 Gemini API 抓取即時新聞
+            news = await getStockNews(symbol, stockName);
         }
         newsCache.current[symbol] = news;
         setStockNews(news);
@@ -200,8 +202,6 @@ function App() {
     setActiveTab(Tab.HOME);
     fetchData(cleanedSettings, true);
   };
-
-  const { positions, summary, processedTransactions } = calculatePortfolio(transactions, prices);
 
   return (
     <div className="bg-darkBg min-h-screen text-slate-100 font-sans selection:bg-blue-500/30">
