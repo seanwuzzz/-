@@ -81,7 +81,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     return { sortedByPL, topWinners, topLosers, annualizedReturn, daysDiff, totalNetPL, totalNetPLPercent };
   }, [positions, transactions, summary]);
 
-  // --- Tab 3: Behavior Logic (Heatmap) ---
+  // --- Tab 3: Behavior Logic (Heatmap & Metrics) ---
   const heatmapRows = useMemo(() => {
     const data: Record<string, number> = {};
     transactions.forEach(tx => {
@@ -120,6 +120,28 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       }
     }
     return rows;
+  }, [transactions]);
+
+  const behaviorMetrics = useMemo(() => {
+    const total = transactions.length;
+    const now = new Date();
+    // 設定為當天結束，確保包含今天的所有交易
+    now.setHours(23, 59, 59, 999);
+    
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // 設定為當天開始
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    const lastMonthCount = transactions.filter(t => {
+      const tDate = new Date(t.date);
+      return tDate >= thirtyDaysAgo && tDate <= now;
+    }).length;
+
+    // 假設一個月約 4 週
+    const weeklyFreq = lastMonthCount / 4;
+
+    return { total, lastMonthCount, weeklyFreq };
   }, [transactions]);
 
   // --- Tab 4: Insights Logic ---
@@ -380,11 +402,18 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700">
                         <div className="text-[10px] text-slate-500 uppercase tracking-wider">總交易次數</div>
-                        <div className="text-xl font-bold text-white">{transactions.length} <span className="text-[10px] font-normal text-slate-400">次</span></div>
+                        <div className="text-xl font-bold text-white">{behaviorMetrics.total} <span className="text-[10px] font-normal text-slate-400">次</span></div>
                     </div>
                     <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700">
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">週平均密度</div>
-                        <div className="text-xl font-bold text-white">{(transactions.length / 4).toFixed(1)} <span className="text-[10px] font-normal text-slate-400">次/週</span></div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">近 30 天交易</div>
+                        <div className="text-xl font-bold text-white">{behaviorMetrics.lastMonthCount} <span className="text-[10px] font-normal text-slate-400">次</span></div>
+                    </div>
+                    <div className="col-span-2 p-3 bg-slate-800/50 rounded-xl border border-slate-700 flex justify-between items-center">
+                        <div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wider">近期週頻率</div>
+                            <div className="text-xs text-slate-500 opacity-60">基於近 30 天活動計算</div>
+                        </div>
+                        <div className="text-xl font-bold text-white">{behaviorMetrics.weeklyFreq.toFixed(1)} <span className="text-[10px] font-normal text-slate-400">次/週</span></div>
                     </div>
                 </div>
             </section>
