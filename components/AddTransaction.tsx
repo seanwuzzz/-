@@ -63,6 +63,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 <input
                     type="text"
                     required
+                    inputMode="numeric"
                     placeholder="例如: 0050"
                     value={formData.symbol}
                     onChange={e => setFormData({...formData, symbol: e.target.value})}
@@ -106,6 +107,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 <input
                     type="number"
                     required
+                    inputMode="numeric"
                     placeholder="1000"
                     value={formData.shares}
                     onChange={e => setFormData({...formData, shares: e.target.value})}
@@ -117,6 +119,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 <input
                     type="number"
                     required
+                    inputMode="decimal"
                     step="0.01"
                     placeholder="580"
                     value={formData.price}
@@ -131,6 +134,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
              <input
                 type="number"
                 required
+                inputMode="numeric"
                 value={formData.fee}
                 onChange={e => setFormData({...formData, fee: e.target.value})}
                 className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"

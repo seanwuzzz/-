@@ -13,7 +13,9 @@ import {
   CircleDollarSign,
   Newspaper,
   ExternalLink,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface Props {
@@ -40,6 +42,7 @@ const HistoryList: React.FC<Props> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [isNewsExpanded, setIsNewsExpanded] = useState(false);
 
   const getColor = (val: number) => (val >= 0 ? 'text-twRed' : 'text-twGreen');
   const getBgColor = (val: number) => (val >= 0 ? 'bg-twRed/10' : 'bg-twGreen/10');
@@ -49,6 +52,11 @@ const HistoryList: React.FC<Props> = ({
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // Reset expand state when filter changes
+  useEffect(() => {
+    setIsNewsExpanded(false);
+  }, [filterSymbol]);
 
   const handleDeleteClick = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -123,39 +131,53 @@ const HistoryList: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* News Section (Only in drill-down mode) */}
+      {/* News Section (Collapsed by default) */}
       {filterSymbol && (
-        <section className="bg-slate-800/40 rounded-3xl p-4 border border-slate-700/50 mb-6">
-            <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
-                <Newspaper size={16} className="text-amber-400" /> 最新動態
-            </h3>
+        <section className="bg-slate-800/40 rounded-3xl border border-slate-700/50 mb-6 overflow-hidden transition-all duration-300">
+            <button 
+                onClick={() => setIsNewsExpanded(!isNewsExpanded)}
+                className="w-full flex items-center justify-between p-4 hover:bg-slate-800/60 transition-colors"
+            >
+                <div className="flex items-center gap-2">
+                    <Newspaper size={16} className="text-amber-400" />
+                    <h3 className="text-sm font-bold text-slate-200">最新動態</h3>
+                    {!isNewsExpanded && news.length > 0 && (
+                        <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse ml-1"></span>
+                    )}
+                </div>
+                {isNewsExpanded ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+            </button>
             
-            {newsLoading ? (
-                <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-500">
-                    <Loader2 size={24} className="animate-spin text-blue-400" />
-                    <span className="text-xs">正在抓取最新新聞...</span>
+            {isNewsExpanded && (
+                <div className="px-4 pb-4 animate-slide-down">
+                    {newsLoading ? (
+                        <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-500">
+                            <Loader2 size={24} className="animate-spin text-blue-400" />
+                            <span className="text-xs">正在抓取最新新聞...</span>
+                        </div>
+                    ) : news.length > 0 ? (
+                        <div className="space-y-3 pt-2">
+                            {news.map((item, idx) => (
+                                <a 
+                                    key={idx} 
+                                    href={item.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="block bg-slate-900/50 p-3 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors group"
+                                >
+                                    <div className="flex justify-between items-start gap-2 mb-1">
+                                        <span className="text-[10px] font-bold text-blue-400 uppercase">{item.source}</span>
+                                        <ExternalLink size={10} className="text-slate-600 group-hover:text-blue-400" />
+                                    </div>
+                                    <h4 className="text-xs font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-200">{item.title}</h4>
+                                    <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{item.snippet}</p>
+                                </a>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-4 text-xs text-slate-600">暫無相關即時新聞</div>
+                    )}
                 </div>
-            ) : news.length > 0 ? (
-                <div className="space-y-3">
-                    {news.map((item, idx) => (
-                        <a 
-                            key={idx} 
-                            href={item.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="block bg-slate-900/50 p-3 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors group"
-                        >
-                            <div className="flex justify-between items-start gap-2 mb-1">
-                                <span className="text-[10px] font-bold text-blue-400 uppercase">{item.source}</span>
-                                <ExternalLink size={10} className="text-slate-600 group-hover:text-blue-400" />
-                            </div>
-                            <h4 className="text-xs font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-200">{item.title}</h4>
-                            <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{item.snippet}</p>
-                        </a>
-                    ))}
-                </div>
-            ) : (
-                <div className="text-center py-4 text-xs text-slate-600">暫無相關即時新聞</div>
             )}
         </section>
       )}

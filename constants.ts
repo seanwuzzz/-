@@ -15,10 +15,23 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 // Google Apps Script Code
-// 此腳本支援交易紀錄管理與 Yahoo 股市新聞抓取
+// 此腳本會在每次被調用時讀取試算表當前的數值。
+// 注意：Google Sheets 的內建公式（如 GOOGLEFINANCE）可能會有 20 分鐘延遲。
 
 function doGet(e) {
   var action = e.parameter.action;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // --- 處理強制刷新與記錄時間戳記 ---
+  if (action === "REFRESH") {
+    var priceSheet = ss.getSheetByName("Prices");
+    if (priceSheet) {
+      // 在 E1:E2 記錄最後刷新時間，這也會觸發試算表的重新計算
+      priceSheet.getRange("E1").setValue("最後刷新時間 (App)");
+      priceSheet.getRange("E2").setValue(new Date());
+      SpreadsheetApp.flush(); // 強制套用變更
+    }
+  }
   
   // --- 處理新聞抓取 (Yahoo Finance via Google RSS Proxy) ---
   if (action === "GET_NEWS") {
@@ -26,7 +39,6 @@ function doGet(e) {
     if (!symbol) return createJsonOutput({error: "Missing symbol"});
     
     try {
-      // 使用 site: 指令限制來源為 Yahoo 股市
       var query = "site:tw.stock.yahoo.com " + symbol;
       var url = "https://news.google.com/rss/search?q=" + encodeURIComponent(query) + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
       var response = UrlFetchApp.fetch(url);
@@ -40,9 +52,8 @@ function doGet(e) {
       for (var i = 0; i < Math.min(items.length, 3); i++) {
         var item = items[i];
         var fullTitle = item.getChildText('title');
-        // 分離標題與來源 (Google News 通常格式為 "標題 - 來源")
         var titleParts = fullTitle.split(" - ");
-        var source = "Yahoo 股市"; // 強制標示為 Yahoo
+        var source = "Yahoo 股市"; 
         var title = titleParts.join(" - ");
         
         news.push({
@@ -59,8 +70,7 @@ function doGet(e) {
     }
   }
 
-  // --- 預設獲取交易與價格資料 ---
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // --- 獲取交易與價格資料 ---
   var txSheet = ss.getSheetByName("Transactions");
   var priceSheet = ss.getSheetByName("Prices");
   
@@ -100,7 +110,8 @@ function doGet(e) {
 
   return createJsonOutput({
     transactions: txData,
-    quotes: quotes
+    quotes: quotes,
+    serverTime: new Date().toISOString()
   });
 }
 

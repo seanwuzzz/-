@@ -7,13 +7,14 @@ import AddTransaction from './components/AddTransaction';
 import Settings from './components/Settings';
 import PortfolioAnalysis from './components/PortfolioAnalysis';
 import HistoryList from './components/HistoryList';
-import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History } from 'lucide-react';
+import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock } from 'lucide-react';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [prices, setPrices] = useState<StockPrice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [filterSymbol, setFilterSymbol] = useState<string | null>(null);
   const [stockNews, setStockNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
@@ -21,27 +22,37 @@ function App() {
   const newsCache = useRef<Record<string, StockNews[]>>({});
   
   const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('twStockSettings');
-    return saved ? JSON.parse(saved) : {
-        googleScriptUrl: '',
-        useDemoData: true
-    };
+    try {
+        const saved = localStorage.getItem('twStockSettings');
+        return saved ? JSON.parse(saved) : {
+            googleScriptUrl: '',
+            useDemoData: true
+        };
+    } catch (e) {
+        return { googleScriptUrl: '', useDemoData: true };
+    }
   });
 
-  const fetchData = async () => {
-    if (settings.useDemoData) {
-        if (transactions.length === 0) {
-            setTransactions([...DEMO_TRANSACTIONS]);
-        }
+  const fetchData = async (forceSettings?: AppSettings) => {
+    const currentSettings = forceSettings || settings;
+    
+    if (currentSettings.useDemoData) {
+        setTransactions([...DEMO_TRANSACTIONS]);
         setPrices(DEMO_PRICES);
+        setLastUpdated(new Date());
         return;
     }
 
-    if (!settings.googleScriptUrl) return;
+    const scriptUrl = currentSettings.googleScriptUrl?.trim();
+    if (!scriptUrl) return;
 
     setLoading(true);
     try {
-        const response = await fetch(settings.googleScriptUrl);
+        const timestamp = new Date().getTime();
+        const separator = scriptUrl.includes('?') ? '&' : '?';
+        const url = `${scriptUrl}${separator}action=REFRESH&t=${timestamp}`;
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.transactions) {
@@ -68,12 +79,21 @@ function App() {
              }));
              setPrices(mappedPrices);
         }
+        setLastUpdated(new Date());
     } catch (error) {
-        console.error("Fetch error", error);
+        console.error("Fetch error:", error);
     } finally {
         setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => {
+        fetchData();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [settings.googleScriptUrl, settings.useDemoData]);
 
   const handleStockDrillDown = async (symbol: string) => {
     setFilterSymbol(symbol);
@@ -90,25 +110,21 @@ function App() {
     
     try {
         let news: StockNews[] = [];
-        
         if (settings.useDemoData || !settings.googleScriptUrl) {
-            // Demo Mode 模擬新聞
-            await new Promise(r => setTimeout(r, 600)); // 模擬網路延遲
+            await new Promise(r => setTimeout(r, 600)); 
             news = [
                 { title: `${symbol} 營收創新高，法人看好後市`, source: "工商時報", url: "#", snippet: "受惠於全球需求強勁，該公司上月營收表現優於預期...", date: "今日" },
                 { title: `${symbol} 除息在即，投資人關注填息力道`, source: "經濟日報", url: "#", snippet: "即將進行年度除息，殖利率表現優異吸引買盤進駐...", date: "昨日" },
                 { title: `台股盤中震盪，${symbol} 展現抗跌韌性`, source: "中央社", url: "#", snippet: "今日大盤走弱，但該股在支撐位表現穩定，吸引長線資金...", date: "前日" }
             ];
         } else {
-            // 從 GAS Proxy 獲取 RSS 新聞
             const response = await fetch(`${settings.googleScriptUrl}?action=GET_NEWS&symbol=${symbol}`);
             news = await response.json();
         }
-
         newsCache.current[symbol] = news;
         setStockNews(news);
     } catch (e) {
-        console.error("Failed to load news via GAS", e);
+        console.error("News error:", e);
     } finally {
         setNewsLoading(false);
     }
@@ -123,7 +139,7 @@ function App() {
     }
     
     try {
-        const response = await fetch(settings.googleScriptUrl, {
+        await fetch(settings.googleScriptUrl, {
             method: 'POST',
             mode: 'no-cors',
             body: JSON.stringify({ ...newTx, id: newId, stockSymbol: newTx.symbol, stockName: newTx.name, pricePerShare: newTx.price, fees: newTx.fee })
@@ -152,14 +168,21 @@ function App() {
   };
 
   const handleSaveSettings = (newSettings: AppSettings) => {
-    setSettings(newSettings);
-    localStorage.setItem('twStockSettings', JSON.stringify(newSettings));
+    const cleanedSettings = {
+        ...newSettings,
+        googleScriptUrl: newSettings.googleScriptUrl?.trim() || ''
+    };
+    
+    // 1. 先更新狀態與本地儲存
+    setSettings(cleanedSettings);
+    localStorage.setItem('twStockSettings', JSON.stringify(cleanedSettings));
+    
+    // 2. 立即切換回首頁
     setActiveTab(Tab.HOME);
+    
+    // 3. 根據新設定強制重新載入資料
+    fetchData(cleanedSettings);
   };
-
-  useEffect(() => {
-    fetchData();
-  }, [settings.useDemoData, settings.googleScriptUrl]);
 
   const { positions, summary, processedTransactions } = calculatePortfolio(transactions, prices);
 
@@ -170,9 +193,25 @@ function App() {
             <h1 className="font-bold text-xl tracking-wide bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
                 投資組合管理
             </h1>
-            <button onClick={fetchData} disabled={loading} className={`p-2 rounded-full hover:bg-slate-800 transition-colors ${loading ? 'animate-spin' : ''}`}>
-                <RefreshCw size={18} className="text-slate-400" />
-            </button>
+            <div className="flex items-center gap-2">
+                {lastUpdated && !loading && (
+                    <div className="flex flex-col items-end">
+                        <span className="text-[9px] text-slate-500 uppercase tracking-tighter">Last Update</span>
+                        <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                            <Clock size={10} />
+                            {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                        </span>
+                    </div>
+                )}
+                <button 
+                    type="button"
+                    onClick={() => fetchData()} 
+                    disabled={loading} 
+                    className={`p-2 rounded-full hover:bg-slate-800 transition-colors relative ${loading ? 'text-blue-400' : 'text-slate-400'}`}
+                >
+                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                </button>
+            </div>
         </header>
       )}
 
@@ -196,11 +235,11 @@ function App() {
       {activeTab !== Tab.ADD && (
         <nav className="fixed bottom-0 w-full z-50 bg-cardBg/90 backdrop-blur-lg border-t border-slate-800 pb-safe">
             <div className="max-w-md mx-auto flex justify-around items-center p-2">
-                <button onClick={() => { setActiveTab(Tab.HOME); setFilterSymbol(null); setStockNews([]); }} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HOME ? 'text-blue-400' : 'text-slate-500'}`}><LayoutDashboard size={20} /><span className="text-[10px] mt-1 font-medium">總覽</span></button>
-                <button onClick={() => setActiveTab(Tab.HISTORY)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HISTORY ? 'text-blue-400' : 'text-slate-500'}`}><History size={20} /><span className="text-[10px] mt-1 font-medium">歷史</span></button>
-                <button onClick={() => setActiveTab(Tab.ADD)} className="flex flex-col items-center justify-center -mt-8 bg-blue-600 hover:bg-blue-500 text-white w-14 h-14 rounded-full shadow-lg shadow-blue-600/30 transition-transform hover:scale-105 active:scale-95"><Plus size={28} /></button>
-                <button onClick={() => setActiveTab(Tab.ANALYSIS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.ANALYSIS ? 'text-blue-400' : 'text-slate-500'}`}><BarChart2 size={20} /><span className="text-[10px] mt-1 font-medium">分析</span></button>
-                <button onClick={() => setActiveTab(Tab.SETTINGS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.SETTINGS ? 'text-blue-400' : 'text-slate-500'}`}><SettingsIcon size={20} /><span className="text-[10px] mt-1 font-medium">設定</span></button>
+                <button type="button" onClick={() => { setActiveTab(Tab.HOME); setFilterSymbol(null); setStockNews([]); }} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HOME ? 'text-blue-400' : 'text-slate-500'}`}><LayoutDashboard size={20} /><span className="text-[10px] mt-1 font-medium">總覽</span></button>
+                <button type="button" onClick={() => setActiveTab(Tab.HISTORY)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HISTORY ? 'text-blue-400' : 'text-slate-500'}`}><History size={20} /><span className="text-[10px] mt-1 font-medium">歷史</span></button>
+                <button type="button" onClick={() => setActiveTab(Tab.ADD)} className="flex flex-col items-center justify-center -mt-8 bg-blue-600 hover:bg-blue-500 text-white w-14 h-14 rounded-full shadow-lg shadow-blue-600/30 transition-transform hover:scale-105 active:scale-95"><Plus size={28} /></button>
+                <button type="button" onClick={() => setActiveTab(Tab.ANALYSIS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.ANALYSIS ? 'text-blue-400' : 'text-slate-500'}`}><BarChart2 size={20} /><span className="text-[10px] mt-1 font-medium">分析</span></button>
+                <button type="button" onClick={() => setActiveTab(Tab.SETTINGS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.SETTINGS ? 'text-blue-400' : 'text-slate-500'}`}><SettingsIcon size={20} /><span className="text-[10px] mt-1 font-medium">設定</span></button>
             </div>
         </nav>
       )}
