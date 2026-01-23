@@ -205,7 +205,7 @@ function App() {
       <main className="max-w-md mx-auto min-h-screen relative overflow-x-hidden">
         {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} onStockClick={handleStockDrillDown} />}
         {activeTab === Tab.HISTORY && <HistoryList transactions={processedTransactions} onDelete={handleDeleteTransaction} filterSymbol={filterSymbol} onClearFilter={() => { setFilterSymbol(null); setStockNews([]); }} news={stockNews} newsLoading={newsLoading} />}
-        {activeTab === Tab.ANALYSIS && <PortfolioAnalysis summary={summary} positions={positions} />}
+        {activeTab === Tab.ANALYSIS && <PortfolioAnalysis summary={summary} positions={positions} transactions={processedTransactions} />}
         {activeTab === Tab.ADD && <AddTransaction onAdd={handleAddTransaction} onCancel={() => setActiveTab(Tab.HOME)} />}
         {activeTab === Tab.SETTINGS && <Settings settings={settings} onSave={handleSaveSettings} />}
       </main>

@@ -1,9 +1,9 @@
 import { Transaction, StockPrice } from './types';
 
-export const APP_VERSION = "v1.1.0 (RSS-NEWS)";
+export const APP_VERSION = "v1.4.2 (HORIZONTAL-HEATMAP)";
 
 export const DEMO_PRICES: StockPrice[] = [
-  { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體' },
+  { symbol: '2330', price: 780, changePercent: 1.5, name: '台績電', sector: '半導體' },
   { symbol: '2317', price: 145, changePercent: -0.5, name: '鴻海', sector: '電子代工' },
   { symbol: '0050', price: 160, changePercent: 0.8, name: '元大台灣50', sector: 'ETF' },
   { symbol: '2454', price: 950, changePercent: 2.1, name: '聯發科', sector: 'IC設計' },
@@ -27,7 +27,6 @@ function doGet(e) {
   var priceSheet = ss.getSheetByName("Prices");
   var txSheet = ss.getSheetByName("Transactions");
   
-  // --- 免費新聞抓取功能 (使用 Google News RSS) ---
   if (action === "GET_NEWS") {
     var symbol = e.parameter.symbol;
     var name = e.parameter.name || "";
