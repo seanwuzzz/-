@@ -30,7 +30,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     setFeeError(null); // 重置錯誤訊息
 
     if (!formData.price || !formData.shares) {
-      setFeeError("請先輸入「股數」與「成交價」才能進行試算。");
+      setFeeError("請先輸入「股數」與「成交價」");
       return;
     }
     
@@ -38,7 +38,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     const shares = parseFloat(formData.shares);
 
     if (isNaN(price) || isNaN(shares)) {
-       setFeeError("請輸入有效的數字。");
+       setFeeError("請輸入有效的數字");
        return;
     }
 
@@ -79,6 +79,9 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     }
   };
 
+  // 統一輸入框樣式：固定高度、內距縮小、移除預設外觀
+  const inputClassName = "w-full h-[42px] bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm appearance-none";
+
   return (
     <div className="p-4 h-full flex flex-col justify-center max-w-lg mx-auto">
       <div className="bg-cardBg rounded-3xl p-6 shadow-2xl border border-slate-700">
@@ -93,7 +96,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     required
                     value={formData.date}
                     onChange={e => setFormData({...formData, date: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                    className={inputClassName}
                 />
             </div>
             <div>
@@ -104,7 +107,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     placeholder="例如: 2330"
                     value={formData.symbol}
                     onChange={handleSymbolChange}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                    className={inputClassName}
                 />
             </div>
           </div>
@@ -117,19 +120,19 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 placeholder="台積電"
                 value={formData.name}
                 onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className={inputClassName}
             />
           </div>
 
-          <div className="flex gap-2 bg-slate-800 p-1 rounded-lg">
+          <div className="flex gap-2 bg-slate-800 p-1 rounded-lg h-[46px] items-center">
             {(['BUY', 'SELL'] as const).map(type => (
                 <button
                     key={type}
                     type="button"
                     onClick={() => setFormData({...formData, type})}
-                    className={`flex-1 py-2 rounded-md text-sm font-bold transition-all ${
+                    className={`flex-1 h-full rounded-md text-sm font-bold transition-all ${
                         formData.type === type 
-                            ? (type === 'BUY' ? 'bg-twRed text-white' : 'bg-twGreen text-white')
+                            ? (type === 'BUY' ? 'bg-twRed text-white shadow-md' : 'bg-twGreen text-white shadow-md')
                             : 'text-slate-400 hover:text-white'
                     }`}
                 >
@@ -151,7 +154,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                         setFormData({...formData, shares: e.target.value});
                         if (feeError) setFeeError(null);
                     }}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                    className={inputClassName}
                 />
             </div>
             <div>
@@ -167,7 +170,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                         setFormData({...formData, price: e.target.value});
                         if (feeError) setFeeError(null);
                     }}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                    className={inputClassName}
                 />
             </div>
           </div>
@@ -183,12 +186,12 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                     inputMode="numeric"
                     value={formData.fee}
                     onChange={e => setFormData({...formData, fee: e.target.value})}
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm pr-24"
+                    className={`${inputClassName} pr-24`}
                 />
                 <button
                     type="button"
                     onClick={handleAutoCalculateFee}
-                    className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-700 hover:bg-slate-600 text-blue-400 rounded-md text-xs font-bold flex items-center gap-1 transition-colors border border-slate-600"
+                    className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-700 hover:bg-slate-600 text-blue-400 rounded-md text-xs font-bold flex items-center gap-1 transition-colors border border-slate-600 active:scale-95"
                 >
                     <Calculator size={12} />
                     自動試算
@@ -206,14 +209,14 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
             <button
                 type="button"
                 onClick={onCancel}
-                className="flex-1 py-3 rounded-xl border border-slate-600 text-slate-300 font-bold text-sm"
+                className="flex-1 py-3 rounded-xl border border-slate-600 text-slate-300 font-bold text-sm h-[48px]"
             >
                 取消
             </button>
             <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-white text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-100 flex justify-center items-center gap-2 text-sm"
+                className="flex-1 bg-white text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-100 flex justify-center items-center gap-2 text-sm h-[48px]"
             >
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <PlusCircle size={18} />}
                 確認新增
