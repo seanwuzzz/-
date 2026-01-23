@@ -33,7 +33,7 @@ function App() {
     }
   });
 
-  const fetchData = async (forceSettings?: AppSettings) => {
+  const fetchData = async (forceSettings?: AppSettings, isManualRefresh = false) => {
     const currentSettings = forceSettings || settings;
     
     if (currentSettings.useDemoData) {
@@ -43,16 +43,29 @@ function App() {
         return;
     }
 
-    const scriptUrl = currentSettings.googleScriptUrl?.trim();
+    let scriptUrl = currentSettings.googleScriptUrl?.trim();
     if (!scriptUrl) return;
+
+    // 自動補全 /exec 避免常見的 Failed to fetch 錯誤
+    if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
+        scriptUrl = scriptUrl.replace(/\/$/, '') + '/exec';
+    }
 
     setLoading(true);
     try {
         const timestamp = new Date().getTime();
         const separator = scriptUrl.includes('?') ? '&' : '?';
-        const url = `${scriptUrl}${separator}action=REFRESH&t=${timestamp}`;
+        // 只有手動刷新時才傳送 action=REFRESH 觸發 GAS 重寫公式
+        const action = isManualRefresh ? 'REFRESH' : 'GET_DATA';
+        const url = `${scriptUrl}${separator}action=${action}&t=${timestamp}`;
         
-        const response = await fetch(url);
+        const response = await fetch(url, { 
+            method: 'GET',
+            cache: 'no-store'
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
         const data = await response.json();
         
         if (data.transactions) {
@@ -81,7 +94,11 @@ function App() {
         }
         setLastUpdated(new Date());
     } catch (error) {
-        console.error("Fetch error:", error);
+        console.error("Fetch error details:", error);
+        // 如果是 Failed to fetch，通常是 CORS 或 URL 錯誤
+        if (error instanceof Error && error.message === 'Failed to fetch') {
+            alert("連線失敗！請確認：\n1. Google Script 已部署為「網頁應用程式」。\n2. 存取權限已設為「任何人」(Anyone)。\n3. URL 是否正確以 /exec 結尾。");
+        }
     } finally {
         setLoading(false);
     }
@@ -90,7 +107,7 @@ function App() {
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
-        fetchData();
+        fetchData(undefined, false); // 背景自動同步不觸發重寫公式
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [settings.googleScriptUrl, settings.useDemoData]);
@@ -118,7 +135,7 @@ function App() {
                 { title: `台股盤中震盪，${symbol} 展現抗跌韌性`, source: "中央社", url: "#", snippet: "今日大盤走弱，但該股在支撐位表現穩定，吸引長線資金...", date: "前日" }
             ];
         } else {
-            const response = await fetch(`${settings.googleScriptUrl}?action=GET_NEWS&symbol=${symbol}`);
+            const response = await fetch(`${settings.googleScriptUrl}${settings.googleScriptUrl.includes('?') ? '&' : '?'}action=GET_NEWS&symbol=${symbol}`);
             news = await response.json();
         }
         newsCache.current[symbol] = news;
@@ -146,7 +163,7 @@ function App() {
         });
         setTransactions(prev => [...prev, { ...newTx, id: newId }]);
         setActiveTab(Tab.HOME);
-        fetchData();
+        setTimeout(() => fetchData(undefined, false), 1000);
     } catch (e) { console.error(e); }
   };
 
@@ -163,25 +180,25 @@ function App() {
             body: JSON.stringify({ action: 'DELETE', id })
         });
         setTransactions(prev => prev.filter(t => t.id !== id));
-        fetchData();
+        setTimeout(() => fetchData(undefined, false), 1000);
     } catch (e) { console.error(e); }
   };
 
   const handleSaveSettings = (newSettings: AppSettings) => {
+    let url = newSettings.googleScriptUrl?.trim() || '';
+    if (url.includes('script.google.com') && !url.endsWith('/exec') && !url.includes('/exec?')) {
+        url = url.replace(/\/$/, '') + '/exec';
+    }
+
     const cleanedSettings = {
         ...newSettings,
-        googleScriptUrl: newSettings.googleScriptUrl?.trim() || ''
+        googleScriptUrl: url
     };
     
-    // 1. 先更新狀態與本地儲存
     setSettings(cleanedSettings);
     localStorage.setItem('twStockSettings', JSON.stringify(cleanedSettings));
-    
-    // 2. 立即切換回首頁
     setActiveTab(Tab.HOME);
-    
-    // 3. 根據新設定強制重新載入資料
-    fetchData(cleanedSettings);
+    fetchData(cleanedSettings, true);
   };
 
   const { positions, summary, processedTransactions } = calculatePortfolio(transactions, prices);
@@ -205,9 +222,10 @@ function App() {
                 )}
                 <button 
                     type="button"
-                    onClick={() => fetchData()} 
+                    onClick={() => fetchData(undefined, true)} 
                     disabled={loading} 
                     className={`p-2 rounded-full hover:bg-slate-800 transition-colors relative ${loading ? 'text-blue-400' : 'text-slate-400'}`}
+                    title="強制重新計算並同步"
                 >
                     <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                 </button>

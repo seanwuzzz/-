@@ -50,7 +50,6 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                     <div className="text-[10px] text-slate-500 mb-1">今日變動</div>
                     <div className={`text-lg font-bold ${getColor(summary.dayPL)} flex flex-col leading-tight`}>
                         <span>{summary.dayPL > 0 ? '+' : ''}{summary.dayPL.toLocaleString()}</span>
-                        <span className="text-[11px] mt-1 text-slate-500 font-normal">今日損益</span>
                     </div>
                 </div>
             </div>
