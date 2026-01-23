@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, StockPrice, AppSettings, Tab, StockNews } from './types';
 import { DEMO_PRICES, DEMO_TRANSACTIONS } from './constants';
 import { calculatePortfolio } from './services/portfolioService';
-import { getStockNews } from './services/geminiService';
 import Dashboard from './components/Dashboard';
 import AddTransaction from './components/AddTransaction';
 import Settings from './components/Settings';
@@ -47,7 +46,6 @@ function App() {
     let scriptUrl = currentSettings.googleScriptUrl?.trim();
     if (!scriptUrl) return;
 
-    // 自動補全 /exec 避免常見的 Failed to fetch 錯誤
     if (scriptUrl.includes('script.google.com') && !scriptUrl.endsWith('/exec') && !scriptUrl.includes('/exec?')) {
         scriptUrl = scriptUrl.replace(/\/$/, '') + '/exec';
     }
@@ -65,7 +63,6 @@ function App() {
         });
 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
         const data = await response.json();
         
         if (data.transactions) {
@@ -95,9 +92,6 @@ function App() {
         setLastUpdated(new Date());
     } catch (error) {
         console.error("Fetch error details:", error);
-        if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
-            alert("連線失敗！請確認：\n1. Google Script 已部署為「網頁應用程式」。\n2. 存取權限已設為「任何人」(Anyone)。\n3. URL 正確以 /exec 結尾。");
-        }
     } finally {
         setLoading(false);
     }
@@ -131,19 +125,25 @@ function App() {
         const stockName = stockPos ? stockPos.name : '';
         
         let news: StockNews[] = [];
-        if (settings.useDemoData) {
+        if (settings.useDemoData || !settings.googleScriptUrl) {
             await new Promise(r => setTimeout(r, 600)); 
             news = [
-                { title: `${symbol} ${stockName} 營收創新高`, source: "範例時報", url: "#", snippet: "這是一則範例新聞內容...", date: "今日" }
+                { title: `[範例] ${symbol} ${stockName} 營收動態`, source: "範例時報", url: "#", snippet: "這是在範例模式下的內容...", date: "今日" }
             ];
         } else {
-            // 直接調用 Gemini API 抓取即時新聞
-            news = await getStockNews(symbol, stockName);
+            // 向 GAS 後端請求新聞 (使用免費的 Google News RSS Proxy)
+            const scriptUrl = settings.googleScriptUrl;
+            const separator = scriptUrl.includes('?') ? '&' : '?';
+            const url = `${scriptUrl}${separator}action=GET_NEWS&symbol=${symbol}&name=${encodeURIComponent(stockName)}`;
+            
+            const response = await fetch(url);
+            news = await response.json();
         }
         newsCache.current[symbol] = news;
         setStockNews(news);
     } catch (e) {
         console.error("News error:", e);
+        setStockNews([]);
     } finally {
         setNewsLoading(false);
     }
@@ -191,12 +191,7 @@ function App() {
     if (url.includes('script.google.com') && !url.endsWith('/exec') && !url.includes('/exec?')) {
         url = url.replace(/\/$/, '') + '/exec';
     }
-
-    const cleanedSettings = {
-        ...newSettings,
-        googleScriptUrl: url
-    };
-    
+    const cleanedSettings = { ...newSettings, googleScriptUrl: url };
     setSettings(cleanedSettings);
     localStorage.setItem('twStockSettings', JSON.stringify(cleanedSettings));
     setActiveTab(Tab.HOME);

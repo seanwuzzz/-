@@ -16,7 +16,7 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 export const GAS_SCRIPT_TEMPLATE = `
 /**
  * Google Apps Script 後端程式碼
- * 功能：提供資料存取介面，並支援強制重新計算 Google Sheets 公式。
+ * 功能：資料存取、強制刷新、以及免費新聞抓取。
  */
 
 function doGet(e) {
@@ -25,30 +25,52 @@ function doGet(e) {
   var priceSheet = ss.getSheetByName("Prices");
   var txSheet = ss.getSheetByName("Transactions");
   
-  // --- 強制刷新機制 (關鍵點：清除並重寫公式以打破快取) ---
+  // --- 1. 免費新聞抓取功能 (使用 Google News RSS) ---
+  if (action === "GET_NEWS") {
+    var symbol = e.parameter.symbol;
+    var name = e.parameter.name || "";
+    var query = encodeURIComponent(symbol + " " + name + " 股票 新聞");
+    var url = "https://news.google.com/rss/search?q=" + query + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
+    
+    try {
+      var response = UrlFetchApp.fetch(url);
+      var xml = response.getContentText();
+      // 簡單的 XML 轉 JSON 處理 (抓取 title, link, source, pubDate)
+      var items = xml.split("<item>").slice(1, 5); // 抓取前 4 則
+      var news = items.map(function(item) {
+        var title = item.match(/<title>(.*?)<\/title>/)[1].replace("<![CDATA[", "").replace("]]>", "");
+        var link = item.match(/<link>(.*?)<\/link>/)[1];
+        var source = item.match(/<source.*?>(.*?)<\/source>/)[1];
+        return {
+          title: title,
+          url: link,
+          source: source,
+          snippet: "點擊連結查看全文...",
+          date: "最新"
+        };
+      });
+      return ContentService.createTextOutput(JSON.stringify(news)).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // --- 2. 強制刷新機制 ---
   if (action === "REFRESH") {
     if (priceSheet && priceSheet.getLastRow() > 1) {
       var lastRow = priceSheet.getLastRow();
-      // 選取 B, C 欄 (價格、漲跌)
       var range = priceSheet.getRange(2, 2, lastRow - 1, 2); 
       var currentFormulas = range.getFormulas();
-      
-      // 1. 先清空內容
       range.clearContent();
       SpreadsheetApp.flush();
-      
-      // 2. 重新寫入公式，這會迫使 GOOGLEFINANCE 重新抓取
       range.setFormulas(currentFormulas);
-      
-      // 更新 E1 作為刷新時間標記
-      priceSheet.getRange("E1").setValue("最後強制刷新: " + new Date().toLocaleString());
-      
+      priceSheet.getRange("E1").setValue("最後刷新: " + new Date().toLocaleString());
       SpreadsheetApp.flush();
-      Utilities.sleep(1000); // 給予 Sheets 一些緩衝時間處理外部 API
+      Utilities.sleep(500);
     }
   }
   
-  // --- 獲取交易資料 ---
+  // --- 3. 獲取交易與股價資料 ---
   var txData = [];
   if (txSheet && txSheet.getLastRow() > 1) {
     var rows = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, 8).getValues();
@@ -66,7 +88,6 @@ function doGet(e) {
     });
   }
 
-  // --- 獲取股價資料 ---
   var quotes = [];
   if (priceSheet && priceSheet.getLastRow() > 1) {
     var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 4).getValues();
@@ -80,7 +101,6 @@ function doGet(e) {
     }).filter(q => q.symbol !== "");
   }
 
-  // 確保回傳正確的 CORS 標頭 (ContentService 自動處理)
   return ContentService.createTextOutput(JSON.stringify({
     transactions: txData,
     quotes: quotes,
