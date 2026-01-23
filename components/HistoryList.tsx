@@ -173,7 +173,7 @@ const HistoryList: React.FC<Props> = ({
                                         <ExternalLink size={10} className="text-slate-600 group-hover:text-blue-400" />
                                     </div>
                                     <h4 className="text-xs font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-200">{item.title}</h4>
-                                    <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{item.snippet}</p>
+                                    <p className="text-[10px] text-slate-500 line-clamp-1 leading-relaxed mt-1 opacity-80">{item.snippet}</p>
                                 </a>
                             ))}
                         </div>

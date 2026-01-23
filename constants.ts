@@ -1,6 +1,6 @@
 import { Transaction, StockPrice } from './types';
 
-export const APP_VERSION = "v1.7.3 (RSS-CLEAN)";
+export const APP_VERSION = "v1.7.5 (NO-CMONEY)";
 
 export const DEMO_PRICES: StockPrice[] = [
   { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體' },
@@ -17,8 +17,8 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 /**
- * Google Apps Script 後端程式碼 v1.7.3
- * 更新：強化文字清理 (cleanText)，修復 HTML 實體編碼錯誤，改進標題切割邏輯。
+ * Google Apps Script 後端程式碼 v1.7.5
+ * 更新：過濾掉 CMoney 來源的新聞。
  */
 
 function doGet(e) {
@@ -29,17 +29,54 @@ function doGet(e) {
     var symbol = e.parameter.symbol;
     var name = e.parameter.name || "";
     
-    // 文字清理工具：去除 HTML 標籤並解碼常見實體
+    // 文字清理工具
     var cleanText = function(str) {
       if (!str) return "";
-      return str.replace(/<[^>]+>/g, " ")     // 移除 HTML 標籤
-                .replace(/&nbsp;/g, " ")      // 空格
-                .replace(/&quot;/g, '"')      // 雙引號
-                .replace(/&apos;/g, "'")      // 單引號
-                .replace(/&#39;/g, "'")       // 單引號
-                .replace(/&amp;/g, "&")       // & 符號 (最後處理)
-                .replace(/\\s+/g, " ")         // 合併多餘空白
+      return str.replace(/<[^>]+>/g, " ")     
+                .replace(/&nbsp;/g, " ")      
+                .replace(/&quot;/g, '"')      
+                .replace(/&apos;/g, "'")      
+                .replace(/&#39;/g, "'")       
+                .replace(/&amp;/g, "&")       
+                .replace(/\\s+/g, " ")         
                 .trim();
+    };
+
+    // 智能標題解析函數
+    var parseTitleAndSource = function(rawTitle, rawSource) {
+       var cleanTitle = cleanText(rawTitle);
+       var cleanSource = cleanText(rawSource);
+       
+       // 定義可能的分隔符號 (Google News 常見格式)
+       var separators = [" - ", " | "];
+       var finalTitle = cleanTitle;
+       var finalSource = cleanSource || "Google News";
+
+       for (var k = 0; k < separators.length; k++) {
+           var sep = separators[k];
+           var lastIdx = finalTitle.lastIndexOf(sep);
+           
+           // 如果找到分隔符，且位於字串較後方 (避免誤切標題本文)
+           // 這裡假設 source 名稱通常不會出現在標題最前面
+           if (lastIdx !== -1 && lastIdx > 0) {
+               var suffix = finalTitle.substring(lastIdx + sep.length).trim();
+               var prefix = finalTitle.substring(0, lastIdx).trim();
+               
+               // 判斷條件：
+               // 1. 如果我們已經有 <source> 標籤 (cleanSource)，且後綴包含它 (或它包含後綴)，那這個後綴就是 source
+               // 2. 如果沒有 <source> 標籤，但後綴很短 (< 20字)，很有可能是 source
+               var isSourceMatch = (cleanSource && (suffix.indexOf(cleanSource) !== -1 || cleanSource.indexOf(suffix) !== -1));
+               var isShortSuffix = suffix.length > 0 && suffix.length < 20;
+
+               if (isSourceMatch || isShortSuffix) {
+                   finalSource = suffix;
+                   finalTitle = prefix;
+                   break; // 找到適合的分隔符就停止
+               }
+           }
+       }
+       
+       return { title: finalTitle, source: finalSource };
     };
 
     var fetchItems = function(queryStr) {
@@ -60,7 +97,7 @@ function doGet(e) {
     // 1. 優先嘗試：名稱 + 代號
     var items = fetchItems(name + " " + symbol);
     
-    // 2. 備援機制：查無資料則僅用代號
+    // 2. 備援機制
     if (!items || items.length === 0) {
        items = fetchItems(symbol);
     }
@@ -68,54 +105,39 @@ function doGet(e) {
     var newsList = [];
     
     try {
-      for (var i = 0; i < Math.min(items.length, 10); i++) {
+      // 改用 loop 檢查所有 items，直到湊滿 10 則或遍歷結束
+      for (var i = 0; i < items.length; i++) {
+        if (newsList.length >= 10) break;
+        
         var item = items[i];
         
-        // 讀取原始資料
         var rawTitle = item.getChildText("title"); 
         var link = item.getChildText("link");
         var pubDateStr = item.getChildText("pubDate");
         var rawDesc = item.getChildText("description") || "";
         var sourceElem = item.getChild("source");
+        var rawSource = sourceElem ? sourceElem.getText() : "";
+
+        // 使用智能解析
+        var parsed = parseTitleAndSource(rawTitle, rawSource);
+        var title = parsed.title;
+        var source = parsed.source;
         
-        // 解析來源
-        var source = sourceElem ? cleanText(sourceElem.getText()) : "";
-        
-        // 解析標題：Google RSS 標題通常是 "新聞標題 - 媒體名稱"
-        // 我們使用 lastIndexOf 來確保只切除最後一個 " - "，避免標題內有破折號被誤切
-        var title = cleanText(rawTitle);
-        var lastDashIndex = title.lastIndexOf(" - ");
-        
-        if (lastDashIndex !== -1) {
-            // 嘗試分離出媒體名稱
-            var potentialSource = title.substring(lastDashIndex + 3).trim();
-            var potentialTitle = title.substring(0, lastDashIndex).trim();
-            
-            // 如果 <source> 標籤抓不到，或抓到的跟標題尾端差不多，就使用標題尾端當來源
-            if (!source || potentialSource.indexOf(source) !== -1 || source.indexOf(potentialSource) !== -1) {
-                source = potentialSource;
-            }
-            title = potentialTitle;
+        // 過濾掉 CMoney 來源 (不分大小寫)
+        if (source && source.toUpperCase().indexOf("CMONEY") !== -1) {
+            continue;
         }
 
-        // 解析摘要：Description 常常是一團亂的 HTML
         var snippet = cleanText(rawDesc);
         
-        // 過濾無意義的摘要
-        // 1. 如果摘要跟標題高度重複
-        if (snippet.indexOf(title) !== -1) {
-             snippet = snippet.replace(title, "").trim();
-        }
-        // 2. 如果摘要只是媒體名稱或包含 "Google News"
+        // 內容過濾
+        if (snippet.indexOf(title) !== -1) snippet = snippet.replace(title, "").trim();
         if (snippet === source || snippet.indexOf("Google News") !== -1 || snippet.indexOf("View Full Coverage") !== -1) {
-            snippet = ""; // 清空，前端會隱藏或不顯示
+            snippet = "";
         }
-        // 3. 截斷過長摘要
-        if (snippet.length > 100) {
-            snippet = snippet.substring(0, 100) + "...";
-        }
+        if (snippet.length > 100) snippet = snippet.substring(0, 100) + "...";
 
-        // 格式化日期
+        // 日期處理
         var pubDate = new Date(pubDateStr);
         var ts = pubDate.getTime();
         var now = new Date();
@@ -135,7 +157,7 @@ function doGet(e) {
         newsList.push({
           title: title,
           url: link,
-          source: source || "Google News",
+          source: source,
           snippet: snippet,
           date: dateDisplay,
           _ts: ts
@@ -155,7 +177,7 @@ function doGet(e) {
     }
   }
 
-  // --- 原有的 Spreadsheet 邏輯 ---
+  // --- Spreadsheet 邏輯 (Transactions & Prices) ---
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var priceSheet = ss.getSheetByName("Prices");
   var txSheet = ss.getSheetByName("Transactions");
