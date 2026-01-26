@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, Briefcase, Hash, ChevronRight } from 'lucide-react';
@@ -40,7 +41,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
                     <div className="text-[10px] text-slate-500 mb-1">未實現損益 <span className="text-[8px] opacity-60">(含費用)</span></div>
                     <div className={`text-lg font-bold ${getColor(summary.totalPL)} flex flex-col leading-tight`}>
-                        <span>{summary.totalPL > 0 ? '+' : ''}{summary.totalPL.toLocaleString()}</span>
+                        <span>{summary.totalPL > 0 ? '+' : ''}{Math.round(summary.totalPL).toLocaleString()}</span>
                         <span className="text-[11px] mt-1 opacity-80 font-medium tracking-wide">
                             ({summary.totalPLPercent.toFixed(2)}%)
                         </span>
@@ -49,7 +50,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
                     <div className="text-[10px] text-slate-500 mb-1">今日變動</div>
                     <div className={`text-lg font-bold ${getColor(summary.dayPL)} flex flex-col leading-tight`}>
-                        <span>{summary.dayPL > 0 ? '+' : ''}{summary.dayPL.toLocaleString()}</span>
+                        <span>{summary.dayPL > 0 ? '+' : ''}{Math.round(summary.dayPL).toLocaleString()}</span>
                     </div>
                 </div>
             </div>
@@ -57,7 +58,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
             <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex justify-between items-center">
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider">已實現損益 <span className="text-[8px] opacity-60">已含交易成本</span></div>
                 <div className={`text-sm font-bold ${getColor(summary.totalRealizedPL)}`}>
-                    {summary.totalRealizedPL > 0 ? '+' : ''}{summary.totalRealizedPL.toLocaleString()}
+                    {summary.totalRealizedPL > 0 ? '+' : ''}{Math.round(summary.totalRealizedPL).toLocaleString()}
                 </div>
             </div>
           </div>
@@ -117,7 +118,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                          </div>
                          <div className="text-right">
                             <div className={`text-sm font-bold ${getColor(pos.unrealizedPL)}`}>
-                                {pos.unrealizedPL > 0 ? '+' : ''}{pos.unrealizedPL.toLocaleString()}
+                                {pos.unrealizedPL > 0 ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}
                             </div>
                             <div className={`text-[10px] font-medium ${getColor(pos.unrealizedPL)} opacity-80`}>
                                 {pos.unrealizedPLPercent.toFixed(2)}%

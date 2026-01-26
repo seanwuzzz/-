@@ -20,6 +20,7 @@ export interface StockPrice {
   changePercent: number;
   name?: string;
   sector?: string;
+  beta?: number; // 新增: 個股 Beta 值
 }
 
 export interface PortfolioPosition {
@@ -36,6 +37,7 @@ export interface PortfolioPosition {
   dayChangeAmount: number;
   realizedPL: number;
   sector: string;
+  beta: number; // 新增: 個股 Beta 值
 }
 
 export interface PortfolioSummary {
@@ -45,6 +47,7 @@ export interface PortfolioSummary {
   totalPLPercent: number;
   totalRealizedPL: number;
   dayPL: number;
+  portfolioBeta: number; // 新增: 投資組合加權 Beta
 }
 
 export interface StockNews {

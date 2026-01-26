@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { PortfolioPosition, PortfolioSummary, Transaction } from '../types';
-import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award } from 'lucide-react';
+import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap } from 'lucide-react';
 
 interface Props {
   positions: PortfolioPosition[];
@@ -149,7 +149,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     // Diversification score (1-10)
     const stockCount = positions.length;
     const sectorCount = allocationData.sectorList.length;
-    const score = Math.min(10, (stockCount * 0.5) + (sectorCount * 1.5));
+    let score = Math.min(10, (stockCount * 0.5) + (sectorCount * 1.5));
     
     // Cost Basis Distance
     const costGapList = positions.map(pos => ({
@@ -157,8 +157,15 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         gap: ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100
     })).sort((a, b) => b.gap - a.gap);
 
-    return { score, costGapList };
-  }, [positions, allocationData]);
+    // Beta Analysis
+    const portfolioBeta = summary.portfolioBeta;
+    let betaDesc = "";
+    if (portfolioBeta < 0.8) betaDesc = "低波動 (保守)";
+    else if (portfolioBeta > 1.2) betaDesc = "高波動 (積極)";
+    else betaDesc = "與大盤同步";
+
+    return { score, costGapList, portfolioBeta, betaDesc };
+  }, [positions, allocationData, summary]);
 
   // --- Helpers ---
   const getIntensityClass = (count: number, isFuture: boolean = false) => {
@@ -168,6 +175,12 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     if (count === 2) return 'bg-blue-700/80';
     if (count === 3) return 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]';
     return 'bg-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.8)]';
+  };
+
+  const getBetaColor = (beta: number) => {
+      if (beta < 0.8) return 'text-twGreen';
+      if (beta > 1.2) return 'text-twRed';
+      return 'text-blue-400';
   };
 
   return (
@@ -434,6 +447,40 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 </div>
                 
                 <div className="space-y-4">
+                    {/* BETA RISK ANALYSIS */}
+                    <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 relative overflow-hidden">
+                        <div className="flex justify-between items-start mb-3 relative z-10">
+                            <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                <Zap size={14} className="text-yellow-400" /> 風險係數 (Beta)
+                            </h4>
+                            <span className={`text-lg font-bold ${getBetaColor(insightsData.portfolioBeta)}`}>
+                                {insightsData.portfolioBeta.toFixed(2)}
+                            </span>
+                        </div>
+                        
+                        <div className="relative h-2 bg-slate-800 rounded-full mb-2 overflow-hidden">
+                            {/* Gradient Bar: Green (Safe) -> Blue (Market) -> Red (Risky) */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-twGreen via-blue-500 to-twRed opacity-30"></div>
+                            {/* Marker */}
+                            <div 
+                                className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] transition-all duration-1000"
+                                style={{ left: `${Math.min(100, Math.max(0, (insightsData.portfolioBeta / 2) * 100))}%` }}
+                            />
+                        </div>
+                        
+                        <div className="flex justify-between text-[9px] text-slate-500 font-mono mb-2">
+                            <span>0.0</span>
+                            <span>1.0 (大盤)</span>
+                            <span>2.0+</span>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                            您的投資組合呈現<span className={`font-bold ${getBetaColor(insightsData.portfolioBeta)}`}> {insightsData.betaDesc} </span>特性。
+                            {insightsData.portfolioBeta > 1.2 && " 波動性高於大盤，多頭市場可能獲利較高，但回檔風險也較大。"}
+                            {insightsData.portfolioBeta < 0.8 && " 波動性低於大盤，表現相對穩健，適合保守防禦。"}
+                        </p>
+                    </div>
+
                     <div className="p-3 bg-slate-900/50 rounded-xl border border-white/5">
                         <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-1.5">
                             <Target size={14} className="text-blue-400" /> 安全邊際 (市價 vs 成本)
