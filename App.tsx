@@ -98,6 +98,60 @@ function App() {
     }
   };
 
+  // 抓取新聞邏輯
+  const fetchNews = async (symbol: string) => {
+    // Demo 模式回傳假資料
+    if (settings.useDemoData) {
+        setNewsLoading(true);
+        await new Promise(r => setTimeout(r, 600));
+        setStockNews([
+            { title: `${symbol} 法說會報喜，外資喊進`, snippet: "公司今日召開法說會，公布上季營收創新高，展望未來...", url: "#", source: "Demo News", date: "2小時前" },
+            { title: `三大法人同步買超 ${symbol}`, snippet: "今日股市開高走低，唯獨該股逆勢抗跌...", url: "#", source: "Demo News", date: "5小時前" },
+            { title: `產業分析：${symbol} 供應鏈受惠`, snippet: "隨著AI需求強勁，相關供應鏈訂單滿載...", url: "#", source: "Demo News", date: "昨天" }
+        ]);
+        setNewsLoading(false);
+        return;
+    }
+
+    if (!settings.googleScriptUrl) return;
+
+    setNewsLoading(true);
+    try {
+        // 嘗試從現有資料中找到股票名稱，以優化搜尋結果
+        const targetName = prices.find(p => p.symbol === symbol)?.name || 
+                           transactions.find(t => t.symbol === symbol)?.name || '';
+        
+        const scriptUrl = settings.googleScriptUrl.trim();
+        const separator = scriptUrl.includes('?') ? '&' : '?';
+        // 呼叫 GAS 的 GET_NEWS 接口
+        const url = `${scriptUrl}${separator}action=GET_NEWS&symbol=${encodeURIComponent(symbol)}&name=${encodeURIComponent(targetName)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (Array.isArray(data)) {
+            setStockNews(data);
+        } else {
+            setStockNews([]);
+        }
+    } catch (e) {
+        console.error("Fetch news error", e);
+        setStockNews([]);
+    } finally {
+        setNewsLoading(false);
+    }
+  };
+
+  // 監聽 activeTab 和 filterSymbol 來觸發新聞抓取
+  useEffect(() => {
+    if (activeTab === Tab.HISTORY && filterSymbol) {
+        fetchNews(filterSymbol);
+    } else {
+        // 離開歷史頁面或沒有選定股票時清空新聞
+        setStockNews([]);
+    }
+  }, [activeTab, filterSymbol, settings.useDemoData]);
+
   useEffect(() => {
     if (settings.googleScriptUrl || settings.useDemoData) {
         fetchData();
