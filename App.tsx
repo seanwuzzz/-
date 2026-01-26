@@ -30,7 +30,7 @@ function App() {
   // 初始設定讀取
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
-        // 先嘗試讀取訪客設定來獲取 Client ID，因為還沒登入不知道是誰
+        // 先嘗試讀取訪客設定來獲取 Client ID
         const saved = localStorage.getItem('twStockSettings_guest');
         return saved ? JSON.parse(saved) : { googleScriptUrl: '', useDemoData: true };
     } catch (e) {
@@ -38,14 +38,14 @@ function App() {
     }
   });
 
-  // 根據 User 切換讀取不同的 Settings (GAS URL)，但 Client ID 通常是全域共享的
+  // 根據 User 切換讀取不同的 Settings (GAS URL)
   useEffect(() => {
     const storageKey = user ? `twStockSettings_${user.email}` : 'twStockSettings_guest';
     try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
             const parsed = JSON.parse(saved);
-            // 確保 Client ID 延續使用 (如果 User setting 裡沒有，就用當前的)
+            // 確保 Client ID 延續使用
             setSettings(prev => ({ 
                 ...parsed, 
                 googleClientId: parsed.googleClientId || prev.googleClientId 
@@ -66,10 +66,61 @@ function App() {
                 setGsiLoaded(true);
                 clearInterval(checkGsi);
             }
-        }, 500); // Check every 500ms
+        }, 500);
         return () => clearInterval(checkGsi);
     }
   }, []);
+
+  // 處理 JWT 解碼 (包含中文姓名支援)
+  const parseJwt = (token: string) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error("JWT Decode failed", e);
+      return null;
+    }
+  };
+
+  const handleGoogleResponse = (response: any) => {
+    try {
+        // 使用自定義的解碼函式，解決 atob 無法解析中文的問題
+        const payload = parseJwt(response.credential);
+        
+        if (!payload) {
+            alert("登入失敗：無法解析使用者資訊");
+            return;
+        }
+
+        const loggedUser: User = {
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture
+        };
+
+        // --- 設定遷移邏輯 ---
+        // 如果這個新登入的使用者之前沒有設定檔，
+        // 將目前的「訪客設定」(包含 GAS URL) 複製過去，避免登入後變成空白資料
+        const userKey = `twStockSettings_${loggedUser.email}`;
+        if (!localStorage.getItem(userKey)) {
+            const currentGuestSettings = localStorage.getItem('twStockSettings_guest');
+            if (currentGuestSettings) {
+                localStorage.setItem(userKey, currentGuestSettings);
+            }
+        }
+
+        setUser(loggedUser);
+        localStorage.setItem('twStock_lastUser', JSON.stringify(loggedUser));
+        setActiveTab(Tab.HOME);
+    } catch (e) {
+        console.error("Login process error", e);
+        alert("登入過程發生錯誤，請查看控制台");
+    }
+  };
 
   // Dynamic Google Login Initialization
   useEffect(() => {
@@ -82,32 +133,13 @@ function App() {
           callback: handleGoogleResponse,
           auto_select: false,
           cancel_on_tap_outside: true,
-          use_fedcm_for_prompt: false // Disable FedCM to prevent NotAllowedError in restricted environments
+          use_fedcm_for_prompt: false // 停用 FedCM 以避免在部分環境報錯
         });
-        // 可以在這裡選擇是否要顯示 One Tap 提示，但在許多 iframe 環境會被阻擋
-        // google.accounts.id.prompt(); 
       } catch (e) {
         console.warn("Google Sign-In init failed", e);
       }
     }
   }, [settings.googleClientId, gsiLoaded]);
-
-  const handleGoogleResponse = (response: any) => {
-    try {
-        const payload = JSON.parse(atob(response.credential.split('.')[1]));
-        const loggedUser: User = {
-          email: payload.email,
-          name: payload.name,
-          picture: payload.picture
-        };
-        setUser(loggedUser);
-        localStorage.setItem('twStock_lastUser', JSON.stringify(loggedUser));
-        // 登入成功後，切換到 Home
-        setActiveTab(Tab.HOME);
-    } catch (e) {
-        console.error("Login parse error", e);
-    }
-  };
 
   const login = () => {
     if (!settings.googleClientId) {
@@ -117,11 +149,11 @@ function App() {
     }
     
     if (gsiLoaded) {
-      // 這裡再次嘗試初始化，確保 ID 是最新的
+      // 重新初始化以確保 callback 是最新的
       google.accounts.id.initialize({
         client_id: settings.googleClientId,
         callback: handleGoogleResponse,
-        use_fedcm_for_prompt: false // Ensure FedCM is disabled here as well
+        use_fedcm_for_prompt: false
       });
       google.accounts.id.prompt((notification: any) => {
          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
@@ -139,11 +171,11 @@ function App() {
     }
     setUser(null);
     localStorage.removeItem('twStock_lastUser');
-    // 登出後回到預設設定 (或保留 Client ID)
+    
+    // 登出後，嘗試保留 Client ID
     const guestSettingsStr = localStorage.getItem('twStockSettings_guest');
     if (guestSettingsStr) {
         const guestSettings = JSON.parse(guestSettingsStr);
-        // 確保 Client ID 不會丟失
         setSettings(prev => ({...guestSettings, googleClientId: prev.googleClientId})); 
     }
   };
@@ -216,16 +248,11 @@ function App() {
   const { positions, summary, processedTransactions } = calculatePortfolio(transactions, prices);
 
   const handleSaveSettings = (newSettings: AppSettings) => {
-    // 儲存邏輯：
-    // 1. 若已登入，存到 User Key
-    // 2. 無論是否登入，都將 googleClientId 同步存到 Guest Key (或是全域設定)，
-    //    這樣登出後 Client ID 還是會被記住，方便下次登入。
-    
     if (user) {
         localStorage.setItem(`twStockSettings_${user.email}`, JSON.stringify(newSettings));
     }
     
-    // 同步更新 Guest 設定中的 Client ID，避免登出後 ID 消失
+    // 同步更新 Guest 設定中的 Client ID
     try {
         const guestSaved = localStorage.getItem('twStockSettings_guest');
         const guestSettings = guestSaved ? JSON.parse(guestSaved) : { googleScriptUrl: '', useDemoData: true };
@@ -240,7 +267,7 @@ function App() {
 
   return (
     <div className="bg-darkBg min-h-screen text-slate-100 font-sans selection:bg-blue-500/30">
-      {/* 1. 全螢幕載入遮罩 (Lock interactions) */}
+      {/* 1. 全螢幕載入遮罩 */}
       {loading && (
         <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
             <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center gap-5">
