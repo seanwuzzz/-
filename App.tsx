@@ -19,6 +19,7 @@ function App() {
   const [filterSymbol, setFilterSymbol] = useState<string | null>(null);
   const [stockNews, setStockNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
+  const [sheetName, setSheetName] = useState<string | null>(null);
   
   // 編輯交易狀態
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -46,6 +47,7 @@ function App() {
         setPrices(DEMO_PRICES);
         setLastUpdated(new Date());
         setLoading(false);
+        setSheetName(null);
         return;
     }
 
@@ -86,6 +88,11 @@ function App() {
                  beta: q.beta
              })));
         }
+
+        if (data.sheetName) {
+            setSheetName(data.sheetName);
+        }
+
         setLastUpdated(new Date());
     } catch (error) {
         console.error("Fetch error:", error);
@@ -304,7 +311,13 @@ function App() {
             />
         )}
         
-        {activeTab === Tab.SETTINGS && <Settings settings={settings} onSave={handleSaveSettings} />}
+        {activeTab === Tab.SETTINGS && (
+            <Settings 
+                settings={settings} 
+                onSave={handleSaveSettings} 
+                linkedSheetName={sheetName} // 傳遞試算表名稱
+            />
+        )}
       </main>
 
       {/* Footer Nav */}

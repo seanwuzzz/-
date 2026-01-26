@@ -1,7 +1,7 @@
 
 import { Transaction, StockPrice } from './types';
 
-export const APP_VERSION = "v1.9.1 (NEWS-SORT)";
+export const APP_VERSION = "v1.9.2 (SHEET-NAME)";
 
 export const DEMO_PRICES: StockPrice[] = [
   { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體', beta: 1.2 },
@@ -18,8 +18,8 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 /**
- * Google Apps Script 後端程式碼 v1.9.1
- * 更新：新增 新聞排序 功能
+ * Google Apps Script 後端程式碼 v1.9.2
+ * 更新：回傳試算表名稱
  */
 
 /**
@@ -205,6 +205,7 @@ function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     transactions: txData,
     quotes: quotes,
+    sheetName: ss.getName(),
     serverTime: new Date().toISOString()
   })).setMimeType(ContentService.MimeType.JSON);
 }

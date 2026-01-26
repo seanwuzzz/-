@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
 import { GAS_SCRIPT_TEMPLATE, APP_VERSION } from '../constants';
-import { Save, Copy, Check, AlertCircle } from 'lucide-react';
+import { Save, Copy, Check, AlertCircle, Link } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
+  linkedSheetName?: string | null; // 新增 prop
 }
 
-const Settings: React.FC<Props> = ({ settings, onSave }) => {
+const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +70,14 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
                         placeholder="https://script.google.com/macros/s/..."
                         className={`w-full bg-slate-800 border rounded-lg p-3 text-white focus:outline-none text-sm transition-colors ${error ? 'border-twRed' : 'border-slate-600 focus:border-blue-500'}`}
                     />
+                    
+                    {/* 顯示已連結的試算表名稱 */}
+                    {linkedSheetName && (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                            <Link size={12} className="shrink-0" />
+                            <span>已連結至: <span className="font-bold">{linkedSheetName}</span></span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
