@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, Briefcase, Hash, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
@@ -30,10 +30,10 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
         <div className="relative z-10">
           <h2 className="text-slate-400 text-xs font-medium mb-1 flex items-center gap-2 uppercase tracking-wider">
-            <DollarSign size={14} /> 總資產市值
+             總資產市值
           </h2>
           <div className="text-4xl font-bold text-white tracking-tight mb-6">
-            ${summary.totalAssets.toLocaleString()}
+            ${Math.round(summary.totalAssets).toLocaleString()}
           </div>
           
           <div className="space-y-4">
@@ -114,7 +114,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick }) => {
                     
                     <div className="flex justify-between items-end">
                          <div className="text-[10px] text-slate-500">
-                            總市值 ${pos.currentValue.toLocaleString()}
+                            總市值 ${Math.round(pos.currentValue).toLocaleString()}
                          </div>
                          <div className="text-right">
                             <div className={`text-sm font-bold ${getColor(pos.unrealizedPL)}`}>
