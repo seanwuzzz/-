@@ -2,15 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
 import { GAS_SCRIPT_TEMPLATE, APP_VERSION } from '../constants';
-import { Save, Copy, Check, AlertCircle, Link } from 'lucide-react';
+import { Save, Copy, Check, AlertCircle, Link, Clock } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
-  linkedSheetName?: string | null; // 新增 prop
+  linkedSheetName?: string | null;
+  lastUpdated?: Date | null;
 }
 
-const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName }) => {
+const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName, lastUpdated }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,11 +72,32 @@ const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName }) => {
                         className={`w-full bg-slate-800 border rounded-lg p-3 text-white focus:outline-none text-sm transition-colors ${error ? 'border-twRed' : 'border-slate-600 focus:border-blue-500'}`}
                     />
                     
-                    {/* 顯示已連結的試算表名稱 */}
-                    {linkedSheetName && (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-                            <Link size={12} className="shrink-0" />
-                            <span>已連結至: <span className="font-bold">{linkedSheetName}</span></span>
+                    {/* Status Cards */}
+                    {(linkedSheetName || lastUpdated) && (
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                             {linkedSheetName && (
+                                <div className="col-span-2 flex items-center gap-3 text-xs text-emerald-400 bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+                                    <div className="p-2 bg-emerald-500/20 rounded-full">
+                                        <Link size={14} className="shrink-0" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-emerald-500/60 font-bold uppercase tracking-wider">已連結 Google Sheets</span>
+                                        <span className="font-bold text-sm truncate">{linkedSheetName}</span>
+                                    </div>
+                                </div>
+                             )}
+                             
+                             {lastUpdated && (
+                                <div className="col-span-2 flex items-center gap-3 text-xs text-blue-400 bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
+                                    <div className="p-2 bg-blue-500/20 rounded-full">
+                                        <Clock size={14} className="shrink-0" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-blue-500/60 font-bold uppercase tracking-wider">最後同步時間</span>
+                                        <span className="font-mono font-bold text-sm">{lastUpdated.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                             )}
                         </div>
                     )}
                 </div>

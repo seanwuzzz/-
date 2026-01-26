@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Transaction, StockPrice, AppSettings, Tab, StockNews } from './types';
 import { DEMO_PRICES, DEMO_TRANSACTIONS } from './constants';
 import { calculatePortfolio } from './services/portfolioService';
@@ -8,7 +8,9 @@ import AddTransaction from './components/AddTransaction';
 import Settings from './components/Settings';
 import PortfolioAnalysis from './components/PortfolioAnalysis';
 import HistoryList from './components/HistoryList';
-import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock, Loader2, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock, Loader2, Briefcase, Timer } from 'lucide-react';
+
+const AUTO_REFRESH_SECONDS = 300; // 5分鐘自動刷新
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
@@ -20,6 +22,9 @@ function App() {
   const [stockNews, setStockNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [sheetName, setSheetName] = useState<string | null>(null);
+  
+  // 自動刷新倒數
+  const [timeLeft, setTimeLeft] = useState(AUTO_REFRESH_SECONDS);
   
   // 編輯交易狀態
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -37,7 +42,7 @@ function App() {
     }
   });
 
-  const fetchData = async (forceSettings?: AppSettings, isManualRefresh = false) => {
+  const fetchData = useCallback(async (forceSettings?: AppSettings, isManualRefresh = false) => {
     const currentSettings = forceSettings || settings;
     
     if (currentSettings.useDemoData) {
@@ -48,6 +53,7 @@ function App() {
         setLastUpdated(new Date());
         setLoading(false);
         setSheetName(null);
+        setTimeLeft(AUTO_REFRESH_SECONDS); // 重置計時器
         return;
     }
 
@@ -99,8 +105,9 @@ function App() {
         if (isManualRefresh) alert("同步失敗，請檢查設定網址。");
     } finally {
         setLoading(false);
+        setTimeLeft(AUTO_REFRESH_SECONDS); // 無論成功失敗都重置計時器
     }
-  };
+  }, [settings]);
 
   // 抓取新聞邏輯
   const fetchNews = async (symbol: string) => {
@@ -152,11 +159,36 @@ function App() {
     }
   }, [activeTab, filterSymbol, settings.useDemoData]);
 
+  // 初始載入與設定變更時載入
   useEffect(() => {
     if (settings.googleScriptUrl || settings.useDemoData) {
         fetchData();
     }
-  }, [settings.googleScriptUrl, settings.useDemoData]);
+  }, [fetchData, settings.googleScriptUrl, settings.useDemoData]);
+
+  // 倒數計時器邏輯
+  useEffect(() => {
+    if (!settings.googleScriptUrl && !settings.useDemoData) return;
+    
+    // 如果正在載入中，不進行倒數
+    if (loading) return;
+
+    const timer = setInterval(() => {
+        setTimeLeft((prev) => {
+            if (prev <= 1) return 0;
+            return prev - 1;
+        });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [loading, settings]);
+
+  // 當倒數歸零時觸發刷新
+  useEffect(() => {
+    if (timeLeft === 0 && !loading && (settings.googleScriptUrl || settings.useDemoData)) {
+        fetchData(undefined, false);
+    }
+  }, [timeLeft, loading, fetchData, settings]);
 
   const handleAddTransaction = async (txData: Omit<Transaction, 'id'>) => {
     if (settings.useDemoData) {
@@ -244,7 +276,14 @@ function App() {
     localStorage.setItem('twStockSettings', JSON.stringify(newSettings));
     setSettings(newSettings);
     setActiveTab(Tab.HOME);
+    // 強制傳入新設定並刷新，fetchData 會重置 Timer
     fetchData(newSettings, true);
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -272,6 +311,14 @@ function App() {
             </div>
             
             <div className="flex items-center gap-3">
+                {/* 倒數計時器 */}
+                {!loading && (settings.googleScriptUrl || settings.useDemoData) && (
+                    <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded-full border border-slate-700">
+                        <Timer size={10} />
+                        {formatTime(timeLeft)}
+                    </div>
+                )}
+
                 {lastUpdated && !loading && (
                     <span className="hidden xs:flex items-center gap-1 text-[10px] font-mono text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full border border-slate-700">
                         <Clock size={10} /> {lastUpdated.toLocaleTimeString([], { hour12: false })}
@@ -315,7 +362,8 @@ function App() {
             <Settings 
                 settings={settings} 
                 onSave={handleSaveSettings} 
-                linkedSheetName={sheetName} // 傳遞試算表名稱
+                linkedSheetName={sheetName}
+                lastUpdated={lastUpdated}
             />
         )}
       </main>
