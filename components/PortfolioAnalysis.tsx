@@ -1,6 +1,7 @@
+
 import React, { useMemo, useState } from 'react';
-import { PortfolioPosition, PortfolioSummary, Transaction } from '../types';
-import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap } from 'lucide-react';
+import { PortfolioPosition, PortfolioSummary, Transaction, ProcessedTransaction } from '../types';
+import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown } from 'lucide-react';
 
 interface Props {
   positions: PortfolioPosition[];
@@ -11,6 +12,7 @@ interface Props {
 enum AnalysisTab {
   ALLOCATION = '配置',
   PERFORMANCE = '損益',
+  YEARLY = '年度',
   BEHAVIOR = '行為',
   INSIGHTS = '診斷'
 }
@@ -28,8 +30,8 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
   }
 
   // --- Common Styles ---
-  const getColor = (val: number) => val >= 0 ? 'text-twRed' : 'text-twGreen';
-  const getBgColor = (val: number) => val >= 0 ? 'bg-twRed' : 'bg-twGreen';
+  const getColor = (val: number) => val > 0 ? 'text-twRed' : (val < 0 ? 'text-twGreen' : 'text-slate-400');
+  const getBgColor = (val: number) => val > 0 ? 'bg-twRed' : (val < 0 ? 'bg-twGreen' : 'bg-slate-600');
 
   // --- Tab 1: Allocation Logic ---
   const allocationData = useMemo(() => {
@@ -81,7 +83,47 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     return { sortedByPL, topWinners, topLosers, annualizedReturn, daysDiff, totalNetPL, totalNetPLPercent };
   }, [positions, transactions, summary]);
 
-  // --- Tab 3: Behavior Logic (Heatmap & Metrics) ---
+  // --- Tab 3: Yearly Performance Logic ---
+  const yearlyData = useMemo(() => {
+    const stats: Record<string, { realizedPL: number, costBasis: number, buyCount: number, sellCount: number, buyVol: number, sellVol: number }> = {};
+    
+    transactions.forEach(tx => {
+        const year = new Date(tx.date).getFullYear().toString();
+        if (!stats[year]) stats[year] = { realizedPL: 0, costBasis: 0, buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0 };
+        
+        const amount = (tx as ProcessedTransaction).totalAmount; // Net amount
+
+        if (tx.type === 'SELL') {
+            const pTx = tx as ProcessedTransaction;
+            // 確保 realizedPL 存在
+            const pl = pTx.realizedPL !== undefined ? pTx.realizedPL : 0;
+            
+            // 賣出總拿回金額 (Net Sell) = 成本 (Cost) + 損益 (PL)
+            // 所以 成本 = 賣出總拿回 - 損益
+            const costOfSold = amount - pl;
+
+            stats[year].realizedPL += pl;
+            stats[year].costBasis += costOfSold;
+            stats[year].sellCount += 1;
+            stats[year].sellVol += amount;
+        } else {
+            stats[year].buyCount += 1;
+            stats[year].buyVol += amount;
+        }
+    });
+
+    // 轉換為陣列並排序 (年份新到舊)
+    const result = Object.entries(stats).map(([year, data]) => ({
+        year,
+        ...data,
+        // 當年報酬率 = 當年已實現損益 / 當年賣出的股票成本
+        roi: data.costBasis > 0 ? (data.realizedPL / data.costBasis) * 100 : 0
+    })).sort((a, b) => Number(b.year) - Number(a.year));
+
+    return result;
+  }, [transactions]);
+
+  // --- Tab 4: Behavior Logic (Heatmap & Metrics) ---
   const heatmapRows = useMemo(() => {
     const data: Record<string, number> = {};
     transactions.forEach(tx => {
@@ -91,11 +133,9 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
 
     const weeksToDisplay = 4;
     const today = new Date();
-    // 找到本週的週日作為結束點
     const end = new Date(today);
     end.setDate(today.getDate() + (6 - today.getDay()));
     
-    // 計算起始點（往前推 4 週的週日）
     const start = new Date(end);
     start.setDate(end.getDate() - (weeksToDisplay * 7) + 1);
     
@@ -125,12 +165,10 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
   const behaviorMetrics = useMemo(() => {
     const total = transactions.length;
     const now = new Date();
-    // 設定為當天結束，確保包含今天的所有交易
     now.setHours(23, 59, 59, 999);
     
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    // 設定為當天開始
     thirtyDaysAgo.setHours(0, 0, 0, 0);
 
     const lastMonthCount = transactions.filter(t => {
@@ -138,13 +176,12 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       return tDate >= thirtyDaysAgo && tDate <= now;
     }).length;
 
-    // 假設一個月約 4 週
     const weeklyFreq = lastMonthCount / 4;
 
     return { total, lastMonthCount, weeklyFreq };
   }, [transactions]);
 
-  // --- Tab 4: Insights Logic ---
+  // --- Tab 5: Insights Logic ---
   const insightsData = useMemo(() => {
     // Diversification score (1-10)
     const stockCount = positions.length;
@@ -189,12 +226,12 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         <h2 className="text-2xl font-bold text-white mb-6 text-center">投資組合分析</h2>
         
         {/* Tab Selection Navigation */}
-        <div className="flex bg-slate-800/50 p-1 rounded-2xl border border-slate-700">
+        <div className="flex bg-slate-800/50 p-1 rounded-2xl border border-slate-700 overflow-x-auto no-scrollbar">
             {Object.values(AnalysisTab).map(tab => (
                 <button
                     key={tab}
                     onClick={() => setActiveSubTab(tab)}
-                    className={`flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all duration-300 ${activeSubTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={`flex-1 min-w-[60px] flex flex-col items-center py-2.5 rounded-xl transition-all duration-300 ${activeSubTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
                 >
                     <span className="text-[10px] font-bold uppercase tracking-widest">{tab}</span>
                 </button>
@@ -273,7 +310,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                             {performanceData.totalNetPLPercent > 0 ? '+' : ''}{performanceData.totalNetPLPercent.toFixed(2)}%
                         </div>
                         <div className={`text-[10px] font-medium mt-1 ${getColor(performanceData.totalNetPL)} opacity-80`}>
-                            {performanceData.totalNetPL > 0 ? '+' : ''}${performanceData.totalNetPL.toLocaleString()}
+                            {performanceData.totalNetPL > 0 ? '+' : ''}${Math.round(performanceData.totalNetPL).toLocaleString()}
                         </div>
                     </div>
                     <div className="bg-black/20 p-4 rounded-2xl border border-white/5 relative overflow-hidden">
@@ -283,7 +320,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                             {performanceData.annualizedReturn > 0 ? '+' : ''}{performanceData.annualizedReturn.toFixed(2)}%
                         </div>
                          <div className="text-[10px] text-slate-500 opacity-60 mt-1">
-                            含已實現損益
+                            總資產複合成長率
                         </div>
                     </div>
                     <div className="col-span-2 bg-black/20 p-3 rounded-xl border border-white/5 flex justify-between items-center">
@@ -312,7 +349,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 </div>
                 <div className="bg-cardBg p-4 rounded-2xl border border-slate-700">
                     <h4 className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center gap-1">
-                        <TrendingUp size={12} className="text-twGreen rotate-180" /> 主要虧損
+                        <TrendingDown size={12} className="text-twGreen" /> 主要虧損
                     </h4>
                     {performanceData.topLosers.length > 0 ? (
                         performanceData.topLosers.map(p => (
@@ -354,6 +391,83 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         })}
                     </div>
                 ) : <div className="text-xs text-slate-500 text-center py-4">無持有部位</div>}
+            </section>
+        </div>
+      )}
+
+      {/* --- Tab Content: YEARLY PERFORMANCE --- */}
+      {activeSubTab === AnalysisTab.YEARLY && (
+        <div className="space-y-6 animate-slide-up">
+            <section className="bg-cardBg p-5 rounded-2xl border border-slate-700">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <CalendarRange size={16} className="text-blue-400" /> 年度已實現績效
+                    </h3>
+                    <div className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700 flex items-center gap-1">
+                        <Info size={10} /> 僅計入已賣出部位
+                    </div>
+                </div>
+
+                {yearlyData.length > 0 ? (
+                    <div className="space-y-6">
+                        {/* Bar Chart Visualization */}
+                        <div className="flex items-end gap-2 h-32 pt-2 pb-2 px-2 border-b border-slate-700/50 mb-6">
+                            {yearlyData.map((y, idx) => {
+                                const maxAbsVal = Math.max(...yearlyData.map(d => Math.abs(d.realizedPL)));
+                                const heightPct = maxAbsVal > 0 ? (Math.abs(y.realizedPL) / maxAbsVal) * 80 : 0;
+                                return (
+                                    <div key={y.year} className="flex-1 flex flex-col items-center gap-1 group">
+                                        <div className="relative w-full flex justify-center h-full items-end">
+                                            <div 
+                                                className={`w-4/5 min-w-[12px] max-w-[30px] rounded-t-sm transition-all duration-500 ${getBgColor(y.realizedPL)} group-hover:opacity-80`}
+                                                style={{ height: `${Math.max(4, heightPct)}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 font-mono">{y.year}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Detailed List */}
+                        <div className="space-y-3">
+                            {yearlyData.map((y) => (
+                                <div key={y.year} className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-colors">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg font-bold text-slate-200 font-mono">{y.year}</span>
+                                            {y.sellCount > 0 ? (
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${y.realizedPL >= 0 ? 'bg-twRed/10 text-twRed' : 'bg-twGreen/10 text-twGreen'}`}>
+                                                    {y.realizedPL > 0 ? '+' : ''}{y.roi.toFixed(1)}%
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-500 italic">無賣出交易</span>
+                                            )}
+                                        </div>
+                                        <span className={`text-sm font-bold ${getColor(y.realizedPL)}`}>
+                                            {y.realizedPL > 0 ? '+' : ''}${Math.round(y.realizedPL).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500">
+                                        <div className="flex justify-between bg-slate-900/30 px-2 py-1 rounded">
+                                            <span>賣出成本</span>
+                                            <span>${Math.round(y.costBasis).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between bg-slate-900/30 px-2 py-1 rounded">
+                                            <span>交易量</span>
+                                            <span>${Math.round(y.buyVol + y.sellVol).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-slate-500 text-xs italic">
+                        尚無任何已實現損益紀錄
+                    </div>
+                )}
             </section>
         </div>
       )}

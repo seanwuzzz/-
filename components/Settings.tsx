@@ -1,14 +1,18 @@
+
 import React, { useState, useEffect } from 'react';
-import { AppSettings } from '../types';
+import { AppSettings, User } from '../types';
 import { GAS_SCRIPT_TEMPLATE, APP_VERSION } from '../constants';
-import { Save, Copy, Check, AlertCircle, Info } from 'lucide-react';
+import { Save, Copy, Check, AlertCircle, LogOut, User as UserIcon, LogIn, Mail, Key, ExternalLink } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
   onSave: (s: AppSettings) => void;
+  user: User | null;
+  onLogout: () => void;
+  onLogin: () => void;
 }
 
-const Settings: React.FC<Props> = ({ settings, onSave }) => {
+const Settings: React.FC<Props> = ({ settings, onSave, user, onLogout, onLogin }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,43 +43,112 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
 
   return (
     <div className="p-4 pb-24 space-y-6 text-slate-200">
-      <h2 className="text-2xl font-bold text-white mb-6 text-center">設定</h2>
+      <h2 className="text-2xl font-bold text-white mb-6 text-center">設定中心</h2>
 
+      {/* User Profile Section */}
       <section className="bg-cardBg p-5 rounded-2xl shadow-lg border border-slate-700">
-        <h3 className="text-lg font-semibold text-white mb-4">資料來源</h3>
+        <h3 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2 uppercase tracking-widest">
+            <UserIcon size={16} /> 帳戶狀態
+        </h3>
         
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm">使用範例資料 (Demo Mode)</span>
-          <button 
-            type="button"
-            onClick={() => handleChange('useDemoData', !localSettings.useDemoData)}
-            className={`w-12 h-6 rounded-full transition-colors relative active:scale-95 ${localSettings.useDemoData ? 'bg-blue-500' : 'bg-slate-600'}`}
-          >
-            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${localSettings.useDemoData ? 'translate-x-6' : ''}`} />
-          </button>
-        </div>
-
-        {!localSettings.useDemoData && (
-          <div className="space-y-2 animate-slide-down">
-            <label className="text-xs text-slate-400">Google Apps Script URL (Web App)</label>
-            <input
-              type="text"
-              value={localSettings.googleScriptUrl}
-              onChange={(e) => handleChange('googleScriptUrl', e.target.value)}
-              placeholder="https://script.google.com/macros/s/..."
-              className={`w-full bg-slate-800 border rounded-lg p-3 text-white focus:outline-none text-sm transition-colors ${error ? 'border-twRed' : 'border-slate-600 focus:border-blue-500'}`}
-            />
-          </div>
+        {user ? (
+            <div className="space-y-4">
+                <div className="flex items-center gap-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <img src={user.picture} alt="Profile" className="w-12 h-12 rounded-full border-2 border-blue-500" />
+                    <div className="flex-1 overflow-hidden">
+                        <div className="text-sm font-bold text-white truncate">{user.name}</div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1 truncate">
+                            <Mail size={10} /> {user.email}
+                        </div>
+                    </div>
+                    <button onClick={onLogout} className="p-2 text-slate-400 hover:text-twRed transition-colors">
+                        <LogOut size={18} />
+                    </button>
+                </div>
+                <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg flex items-start gap-2">
+                    <Check size={14} className="text-blue-400 mt-0.5 shrink-0" />
+                    <span className="text-[10px] text-blue-300 leading-relaxed">
+                        已為此帳號啟用「網址自動記憶」功能。您在此輸入的 GAS 網址將與此 Email 綁定。
+                    </span>
+                </div>
+            </div>
+        ) : (
+            <div className="bg-slate-800/50 p-6 rounded-xl border border-dashed border-slate-600 text-center">
+                <UserIcon size={32} className="mx-auto text-slate-600 mb-3" />
+                <p className="text-xs text-slate-400 mb-4">登入 Google 帳號後即可自動同步您的專屬 GAS 網址</p>
+                
+                {/* 如果還沒設定 Client ID，顯示提示 */}
+                {!localSettings.googleClientId ? (
+                     <div className="text-[10px] text-amber-400 bg-amber-400/10 p-2 rounded mb-3">
+                        請先在下方「系統設定」輸入 Google Client ID 才能登入
+                     </div>
+                ) : (
+                    <button onClick={onLogin} className="inline-flex items-center gap-2 bg-white text-slate-900 px-6 py-2 rounded-full font-bold text-sm active:scale-95 transition-transform">
+                        <LogIn size={16} /> 使用 Google 登入
+                    </button>
+                )}
+            </div>
         )}
       </section>
 
-      <section className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700">
-        <h3 className="text-lg font-semibold text-white mb-2">如何建立 Google Sheet 後端？</h3>
-        <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-          本應用程式使用 GAS 抓取新聞 RSS，完全不產生額外 API 費用。
-        </p>
+      <section className="bg-cardBg p-5 rounded-2xl shadow-lg border border-slate-700">
+        <h3 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2 uppercase tracking-widest">系統設定</h3>
+        
+        <div className="space-y-4 animate-slide-down">
+            {/* Google Client ID Input */}
+            <div className="space-y-2">
+                <label className="text-xs text-slate-400 flex items-center gap-1">
+                    <Key size={12} /> Google OAuth Client ID
+                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 ml-auto flex items-center gap-0.5">
+                        取得 ID <ExternalLink size={10} />
+                    </a>
+                </label>
+                <input
+                    type="text"
+                    value={localSettings.googleClientId || ''}
+                    onChange={(e) => handleChange('googleClientId', e.target.value)}
+                    placeholder="例如: 123456-abcde.apps.googleusercontent.com"
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-xs transition-colors font-mono"
+                />
+                <p className="text-[9px] text-slate-500 leading-relaxed">
+                    用於啟用 Google 登入功能。請至 Google Cloud Console 建立 OAuth 2.0 用戶端 ID (Web Application)。
+                </p>
+            </div>
+
+            <div className="h-px bg-slate-700/50 my-2"></div>
+
+            {/* Demo Mode Toggle */}
+            <div className="flex items-center justify-between">
+                <span className="text-sm">使用範例資料 (Demo Mode)</span>
+                <button 
+                    type="button"
+                    onClick={() => handleChange('useDemoData', !localSettings.useDemoData)}
+                    className={`w-12 h-6 rounded-full transition-colors relative active:scale-95 ${localSettings.useDemoData ? 'bg-blue-500' : 'bg-slate-600'}`}
+                >
+                    <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${localSettings.useDemoData ? 'translate-x-6' : ''}`} />
+                </button>
+            </div>
+
+            {/* GAS URL Input */}
+            {!localSettings.useDemoData && (
+                <div className="space-y-2 animate-slide-down">
+                    <label className="text-xs text-slate-400">Google Apps Script URL (Web App)</label>
+                    <input
+                        type="text"
+                        value={localSettings.googleScriptUrl}
+                        onChange={(e) => handleChange('googleScriptUrl', e.target.value)}
+                        placeholder="https://script.google.com/macros/s/..."
+                        className={`w-full bg-slate-800 border rounded-lg p-3 text-white focus:outline-none text-sm transition-colors ${error ? 'border-twRed' : 'border-slate-600 focus:border-blue-500'}`}
+                    />
+                </div>
+            )}
+        </div>
+      </section>
+
+      <section className="bg-slate-800/30 p-5 rounded-2xl border border-slate-700">
+        <h3 className="text-sm font-bold text-white mb-2">如何建立後端？</h3>
         <div className="relative bg-slate-900 p-3 rounded-lg border border-slate-700 overflow-hidden">
-            <pre className="text-[10px] text-slate-300 overflow-x-auto h-24 custom-scrollbar">
+            <pre className="text-[10px] text-slate-400 overflow-x-auto h-20 custom-scrollbar">
                 {GAS_SCRIPT_TEMPLATE}
             </pre>
             <button 
@@ -87,12 +160,6 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
                 {copied ? '已複製' : '複製代碼'}
             </button>
         </div>
-        <ol className="mt-4 text-[10px] text-slate-400 list-decimal list-inside space-y-1.5">
-            <li>建立一個新的 Google Sheet。</li>
-            <li>分頁命名為 <code>Transactions</code> 與 <code>Prices</code>。</li>
-            <li>擴充功能 &gt; Apps Script &gt; 貼上代碼。</li>
-            <li>部署 &gt; 網頁應用程式 &gt; 權限設為「所有人」。</li>
-        </ol>
       </section>
 
       <div className="space-y-3">
@@ -105,16 +172,15 @@ const Settings: React.FC<Props> = ({ settings, onSave }) => {
         <button 
             type="button"
             onClick={handleSave}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20 active:scale-95 touch-manipulation"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20 active:scale-95"
         >
             <Save size={20} />
-            儲存並返回
+            儲存設定
         </button>
       </div>
 
-      <div className="pt-6 border-t border-slate-800 flex flex-col items-center gap-1 opacity-40">
-        <span className="text-[10px] font-mono tracking-widest text-slate-500">VERSION</span>
-        <span className="text-xs font-bold text-slate-400">{APP_VERSION}</span>
+      <div className="text-center opacity-30 pt-4">
+        <span className="text-[10px] font-mono tracking-widest text-slate-500 uppercase">{APP_VERSION}</span>
       </div>
     </div>
   );
