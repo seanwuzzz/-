@@ -20,19 +20,16 @@ function App() {
   const [stockNews, setStockNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   
+  // 編輯交易狀態
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
   // 初始設定讀取
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
-        // 統一使用單一 Key
         const saved = localStorage.getItem('twStockSettings');
-        if (saved) {
-            return JSON.parse(saved);
-        }
-        // 遷移：如果找不到新 Key，嘗試讀取舊的 Guest Key (向下相容)
+        if (saved) return JSON.parse(saved);
         const oldGuest = localStorage.getItem('twStockSettings_guest');
-        if (oldGuest) {
-            return JSON.parse(oldGuest);
-        }
+        if (oldGuest) return JSON.parse(oldGuest);
         return { googleScriptUrl: '', useDemoData: true };
     } catch (e) {
         return { googleScriptUrl: '', useDemoData: true };
@@ -100,14 +97,13 @@ function App() {
 
   // 抓取新聞邏輯
   const fetchNews = async (symbol: string) => {
-    // Demo 模式回傳假資料
     if (settings.useDemoData) {
         setNewsLoading(true);
         await new Promise(r => setTimeout(r, 600));
         setStockNews([
-            { title: `${symbol} 法說會報喜，外資喊進`, snippet: "公司今日召開法說會，公布上季營收創新高，展望未來...", url: "#", source: "Demo News", date: "2小時前" },
-            { title: `三大法人同步買超 ${symbol}`, snippet: "今日股市開高走低，唯獨該股逆勢抗跌...", url: "#", source: "Demo News", date: "5小時前" },
-            { title: `產業分析：${symbol} 供應鏈受惠`, snippet: "隨著AI需求強勁，相關供應鏈訂單滿載...", url: "#", source: "Demo News", date: "昨天" }
+            { title: `${symbol} 法說會報喜，外資喊進`, snippet: "公司今日召開法說會，公布上季營收創新高，展望未來...", url: "#", source: "Demo News", date: "2小時前", _ts: Date.now() },
+            { title: `三大法人同步買超 ${symbol}`, snippet: "今日股市開高走低，唯獨該股逆勢抗跌...", url: "#", source: "Demo News", date: "5小時前", _ts: Date.now() - 18000000 },
+            { title: `產業分析：${symbol} 供應鏈受惠`, snippet: "隨著AI需求強勁，相關供應鏈訂單滿載...", url: "#", source: "Demo News", date: "昨天", _ts: Date.now() - 86400000 }
         ]);
         setNewsLoading(false);
         return;
@@ -117,20 +113,19 @@ function App() {
 
     setNewsLoading(true);
     try {
-        // 嘗試從現有資料中找到股票名稱，以優化搜尋結果
         const targetName = prices.find(p => p.symbol === symbol)?.name || 
                            transactions.find(t => t.symbol === symbol)?.name || '';
-        
         const scriptUrl = settings.googleScriptUrl.trim();
         const separator = scriptUrl.includes('?') ? '&' : '?';
-        // 呼叫 GAS 的 GET_NEWS 接口
         const url = `${scriptUrl}${separator}action=GET_NEWS&symbol=${encodeURIComponent(symbol)}&name=${encodeURIComponent(targetName)}`;
 
         const res = await fetch(url);
         const data = await res.json();
         
         if (Array.isArray(data)) {
-            setStockNews(data);
+            // 依照時間排序 (由新到舊)
+            const sortedData = data.sort((a: any, b: any) => (b._ts || 0) - (a._ts || 0));
+            setStockNews(sortedData);
         } else {
             setStockNews([]);
         }
@@ -142,12 +137,10 @@ function App() {
     }
   };
 
-  // 監聽 activeTab 和 filterSymbol 來觸發新聞抓取
   useEffect(() => {
     if (activeTab === Tab.HISTORY && filterSymbol) {
         fetchNews(filterSymbol);
     } else {
-        // 離開歷史頁面或沒有選定股票時清空新聞
         setStockNews([]);
     }
   }, [activeTab, filterSymbol, settings.useDemoData]);
@@ -158,7 +151,87 @@ function App() {
     }
   }, [settings.googleScriptUrl, settings.useDemoData]);
 
-  const { positions, summary, processedTransactions } = calculatePortfolio(transactions, prices);
+  const handleAddTransaction = async (txData: Omit<Transaction, 'id'>) => {
+    if (settings.useDemoData) {
+        const newTx = { ...txData, id: Math.random().toString(36).substr(2, 9) };
+        if (editingTransaction) {
+            // Demo Mode Edit
+            setTransactions(prev => prev.map(t => t.id === editingTransaction.id ? { ...txData, id: editingTransaction.id } : t));
+        } else {
+            // Demo Mode Add
+            setTransactions(prev => [...prev, newTx]);
+        }
+        setActiveTab(Tab.HOME);
+        setEditingTransaction(null);
+        return;
+    }
+
+    if (!settings.googleScriptUrl) return;
+
+    // 準備 POST Payload
+    const payload = {
+        ...txData,
+        stockSymbol: txData.symbol,
+        stockName: txData.name,
+        shares: txData.shares,
+        pricePerShare: txData.price,
+        fees: txData.fee,
+        id: editingTransaction ? editingTransaction.id : new Date().getTime().toString(), // Update 用舊 ID, Create 用新 ID
+        action: editingTransaction ? 'UPDATE' : 'CREATE' // 判斷動作
+    };
+
+    try {
+        const response = await fetch(settings.googleScriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        await new Promise(r => setTimeout(r, 1500));
+        await fetchData();
+        setActiveTab(Tab.HOME);
+    } catch (error) {
+        console.error("Add/Update transaction error:", error);
+        alert("連線失敗，請稍後再試。");
+    } finally {
+        setEditingTransaction(null);
+    }
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (settings.useDemoData) {
+        setTransactions(prev => prev.filter(t => t.id !== id));
+        return;
+    }
+
+    if (!settings.googleScriptUrl) return;
+
+    try {
+        await fetch(settings.googleScriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'DELETE', id })
+        });
+        await new Promise(r => setTimeout(r, 1000));
+        await fetchData();
+    } catch (error) {
+        alert("刪除失敗");
+    }
+  };
+
+  const handleStartEdit = (tx: Transaction) => {
+    setEditingTransaction(tx);
+    setActiveTab(Tab.ADD);
+  };
+
+  const handleCancelEdit = () => {
+      setEditingTransaction(null);
+      setActiveTab(Tab.HOME);
+  };
+
+  const { positions, summary, processedTransactions, closedTrades } = calculatePortfolio(transactions, prices);
 
   const handleSaveSettings = (newSettings: AppSettings) => {
     localStorage.setItem('twStockSettings', JSON.stringify(newSettings));
@@ -207,9 +280,30 @@ function App() {
 
       <main className={`max-w-md mx-auto min-h-screen relative overflow-x-hidden transition-opacity duration-500 ${loading ? 'opacity-30' : 'opacity-100'}`}>
         {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} onStockClick={(s) => { setFilterSymbol(s); setActiveTab(Tab.HISTORY); }} />}
-        {activeTab === Tab.HISTORY && <HistoryList transactions={processedTransactions} onDelete={async (id) => {/* logic already in HistoryList */}} filterSymbol={filterSymbol} onClearFilter={() => setFilterSymbol(null)} news={stockNews} newsLoading={newsLoading} />}
+        
+        {activeTab === Tab.HISTORY && (
+            <HistoryList 
+                transactions={processedTransactions} 
+                closedTrades={closedTrades} 
+                onDelete={handleDeleteTransaction} 
+                onEdit={handleStartEdit} // 傳遞編輯函數
+                filterSymbol={filterSymbol} 
+                onClearFilter={() => setFilterSymbol(null)} 
+                news={stockNews} 
+                newsLoading={newsLoading} 
+            />
+        )}
+        
         {activeTab === Tab.ANALYSIS && <PortfolioAnalysis summary={summary} positions={positions} transactions={processedTransactions} />}
-        {activeTab === Tab.ADD && <AddTransaction onAdd={async (tx) => { /* logic to handle GAS call */ }} onCancel={() => setActiveTab(Tab.HOME)} />}
+        
+        {activeTab === Tab.ADD && (
+            <AddTransaction 
+                onAdd={handleAddTransaction} 
+                onCancel={handleCancelEdit} 
+                initialData={editingTransaction} // 傳遞編輯資料
+            />
+        )}
+        
         {activeTab === Tab.SETTINGS && <Settings settings={settings} onSave={handleSaveSettings} />}
       </main>
 
@@ -219,7 +313,7 @@ function App() {
             <div className="max-w-md mx-auto flex justify-around items-center p-2">
                 <button onClick={() => setActiveTab(Tab.HOME)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HOME ? 'text-blue-400' : 'text-slate-500'}`}><LayoutDashboard size={20} /><span className="text-[10px] mt-1 font-medium">總覽</span></button>
                 <button onClick={() => setActiveTab(Tab.HISTORY)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.HISTORY ? 'text-blue-400' : 'text-slate-500'}`}><History size={20} /><span className="text-[10px] mt-1 font-medium">歷史</span></button>
-                <button onClick={() => setActiveTab(Tab.ADD)} className="flex flex-col items-center justify-center -mt-8 bg-blue-600 hover:bg-blue-500 text-white w-14 h-14 rounded-full shadow-lg shadow-blue-600/30 transition-transform hover:scale-105 active:scale-95"><Plus size={28} /></button>
+                <button onClick={() => { setEditingTransaction(null); setActiveTab(Tab.ADD); }} className="flex flex-col items-center justify-center -mt-8 bg-blue-600 hover:bg-blue-500 text-white w-14 h-14 rounded-full shadow-lg shadow-blue-600/30 transition-transform hover:scale-105 active:scale-95"><Plus size={28} /></button>
                 <button onClick={() => setActiveTab(Tab.ANALYSIS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.ANALYSIS ? 'text-blue-400' : 'text-slate-500'}`}><BarChart2 size={20} /><span className="text-[10px] mt-1 font-medium">分析</span></button>
                 <button onClick={() => setActiveTab(Tab.SETTINGS)} className={`flex flex-col items-center p-2 rounded-xl w-16 transition-all ${activeTab === Tab.SETTINGS ? 'text-blue-400' : 'text-slate-500'}`}><SettingsIcon size={20} /><span className="text-[10px] mt-1 font-medium">設定</span></button>
             </div>

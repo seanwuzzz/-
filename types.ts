@@ -52,6 +52,20 @@ export interface PortfolioSummary {
   portfolioBeta: number; // 新增: 投資組合加權 Beta
 }
 
+export interface ClosedTrade {
+  id: string; // 使用賣出交易的 ID
+  symbol: string;
+  name: string;
+  sellDate: string;
+  buyDate: string; // 如果有多筆買入，顯示最早的或範圍
+  shares: number;
+  avgBuyPrice: number; // 加權平均買入價
+  sellPrice: number;
+  realizedPL: number; // 已實現損益 (扣除所有手續費)
+  roi: number; // 報酬率
+  holdDays: number; // 持有天數
+}
+
 export interface StockNews {
   title: string;
   snippet: string;

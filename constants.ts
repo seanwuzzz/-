@@ -1,6 +1,7 @@
+
 import { Transaction, StockPrice } from './types';
 
-export const APP_VERSION = "v1.8.5 (BETA-1Y)";
+export const APP_VERSION = "v1.9.1 (NEWS-SORT)";
 
 export const DEMO_PRICES: StockPrice[] = [
   { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體', beta: 1.2 },
@@ -17,8 +18,8 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 /**
- * Google Apps Script 後端程式碼 v1.8.5
- * 更新：針對 GoodInfo 抓取第 6 個 Beta 數值 (一年期 Beta)。
+ * Google Apps Script 後端程式碼 v1.9.1
+ * 更新：新增 新聞排序 功能
  */
 
 /**
@@ -55,42 +56,24 @@ function GET_YAHOO_BETA(symbol) {
       var htmlGood = UrlFetchApp.fetch(urlGood, paramsGood).getContentText();
       
       // 策略：找到 "Beta" 標題，然後往後抓取數值
-      // 截圖顯示結構為: <a ...>Beta</a> ... <td>數值1</td> ... <td>數值6</td>
       var betaKeyword = "Beta";
-      // 嘗試定位 >Beta< 或 Beta
       var betaIdx = htmlGood.indexOf(">" + betaKeyword + "<"); 
       if (betaIdx === -1) betaIdx = htmlGood.indexOf(betaKeyword);
 
       if (betaIdx !== -1) {
-        // 抓取 Beta 後的一段 HTML (長度 4000 足夠涵蓋該列)
         var snippet = htmlGood.substring(betaIdx, betaIdx + 4000);
-        
-        // Regex 解釋：
-        // >          : 標籤結尾
-        // \\s*        : 允許空白
-        // (-?\\d+\\.\\d+) : 捕獲群組，抓取浮點數 (包含負號，例如 1.36, -0.5)
-        // \\s*        : 允許空白
-        // <          : 標籤開始
-        // 此 Regex 會忽略 HTML 屬性中的數字 (因為屬性不會被 >< 包圍)
         var r = />\\s*(-?\\d+\\.\\d+)\\s*</g;
-        
         var foundValues = [];
         var m;
-        // 依序找出所有符合的數值
         while ((m = r.exec(snippet)) !== null) {
             foundValues.push(Number(m[1]));
-            // 優化效能：抓到第 8 個就可以停了 (因為我們要第 6 個)
             if (foundValues.length >= 8) break; 
         }
-        
-        // 使用者指定：抓取第六個 (Array Index 5) -> 一年 Beta
         if (foundValues.length >= 6) {
             return foundValues[5];
         }
       }
-    } catch(e) {
-       // GoodInfo 失敗
-    }
+    } catch(e) {}
   }
 
   // --- 來源 2: HiStock 嗨投資 (備援) ---
@@ -99,8 +82,6 @@ function GET_YAHOO_BETA(symbol) {
       var url2 = "https://histock.tw/stock/" + plainSymbol;
       var params2 = { muteHttpExceptions: true };
       var html2 = UrlFetchApp.fetch(url2, params2).getContentText();
-      
-      // HiStock 結構較簡單，通常抓取 "Beta" 後的第一個數值
       var idx2 = html2.indexOf("Beta");
       if (idx2 !== -1) {
          var snip2 = html2.substring(idx2, idx2 + 500).replace(/<[^>]+>/g, " ");
@@ -126,7 +107,6 @@ function GET_YAHOO_BETA(symbol) {
     }
   } catch (e) {}
 
-  // 若全數失敗，回傳 1
   return 1;
 }
 
@@ -177,6 +157,10 @@ function doGet(e) {
         });
       }
     }
+
+    // 依時間排序 (新 -> 舊)
+    newsList.sort(function(a, b) { return b._ts - a._ts; });
+
     return ContentService.createTextOutput(JSON.stringify(newsList)).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -206,7 +190,6 @@ function doGet(e) {
 
   var quotes = [];
   if (priceSheet && priceSheet.getLastRow() > 1) {
-    // 讀取 A 到 E 欄 (Symbol, Price, Change, Sector, Beta)
     var pRows = priceSheet.getRange(2, 1, priceSheet.getLastRow() - 1, 5).getValues();
     quotes = pRows.map(function(row) {
       return { 
@@ -214,7 +197,7 @@ function doGet(e) {
           price: Number(row[1]), 
           changePercent: Number(row[2]), 
           sector: String(row[3] || "未分類"),
-          beta: Number(row[4] || 1) // E 欄為 Beta
+          beta: Number(row[4] || 1)
       };
     }).filter(function(q) { return q.symbol !== ""; });
   }
@@ -231,7 +214,9 @@ function doPost(e) {
   var txSheet = ss.getSheetByName("Transactions");
   var priceSheet = ss.getSheetByName("Prices");
   var data = JSON.parse(e.postData.contents);
+  var cleanSymbol = String(data.stockSymbol).trim();
   
+  // --- DELETE ACTION ---
   if (data.action === "DELETE") {
     var idToDelete = String(data.id).trim();
     var rows = txSheet.getDataRange().getValues();
@@ -244,9 +229,41 @@ function doPost(e) {
     return createResponse("not_found");
   }
 
-  var cleanSymbol = String(data.stockSymbol).trim();
+  // --- UPDATE ACTION ---
+  if (data.action === "UPDATE") {
+    var idToUpdate = String(data.id).trim();
+    var rows = txSheet.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === idToUpdate) {
+        // 更新該列資料 (Col 2~8): Date, Type, Symbol, Name, Shares, Price, Fee
+        // Row index is i + 1
+        txSheet.getRange(i + 1, 2, 1, 7).setValues([[
+            data.date, 
+            data.type, 
+            "'" + cleanSymbol, 
+            data.stockName, 
+            data.shares, 
+            data.pricePerShare, 
+            data.fees
+        ]]);
+        
+        // 檢查是否需要更新 Price Sheet (如果改了股票代號)
+        checkAndAddPriceRow(priceSheet, cleanSymbol);
+        
+        return createResponse("success");
+      }
+    }
+    return createResponse("not_found");
+  }
+
+  // --- CREATE ACTION (Default) ---
   txSheet.appendRow(["'" + data.id, data.date, data.type, "'" + cleanSymbol, data.stockName, data.shares, data.pricePerShare, data.fees]);
+  checkAndAddPriceRow(priceSheet, cleanSymbol);
   
+  return createResponse("success");
+}
+
+function checkAndAddPriceRow(priceSheet, cleanSymbol) {
   var colA = priceSheet.getRange("A:A").getValues();
   var exists = false;
   for(var i=0; i<colA.length; i++) {
@@ -256,14 +273,11 @@ function doPost(e) {
   if (!exists) {
     var nextRow = priceSheet.getLastRow() + 1;
     priceSheet.getRange(nextRow, 1).setValue("'" + cleanSymbol);
-    // 更新公式以包含 Beta
     priceSheet.getRange(nextRow, 2).setFormula('=GET_TW_PRICE(A' + nextRow + ')');
     priceSheet.getRange(nextRow, 3).setFormula('=GET_STOCK_CHANGE(A' + nextRow + ')');
     priceSheet.getRange(nextRow, 4).setFormula('=getStockSector(A' + nextRow + ')');
     priceSheet.getRange(nextRow, 5).setFormula('=GET_YAHOO_BETA(A' + nextRow + ')');
   }
-  
-  return createResponse("success");
 }
 
 function createResponse(status) {

@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Transaction } from '../types';
-import { PlusCircle, Loader2, Calculator, AlertCircle } from 'lucide-react';
+import { PlusCircle, Loader2, Calculator, AlertCircle, Save, X } from 'lucide-react';
 
 interface Props {
   onAdd: (tx: Omit<Transaction, 'id'>) => Promise<void>;
   onCancel: () => void;
+  initialData?: Transaction | null; // 支援編輯模式
 }
 
-const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
+const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
   const [loading, setLoading] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -20,6 +22,21 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     fee: '20'
   });
 
+  // 如果有 initialData，初始化表單
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        date: initialData.date,
+        symbol: initialData.symbol,
+        name: initialData.name,
+        type: initialData.type,
+        shares: initialData.shares.toString(),
+        price: initialData.price.toString(),
+        fee: initialData.fee.toString()
+      });
+    }
+  }, [initialData]);
+
   const handleSymbolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // 僅允許數字與英文字母，並自動轉大寫
     const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -27,7 +44,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
   };
 
   const handleAutoCalculateFee = () => {
-    setFeeError(null); // 重置錯誤訊息
+    setFeeError(null);
 
     if (!formData.price || !formData.shares) {
       setFeeError("請先輸入「股數」與「成交價」");
@@ -49,9 +66,6 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
     
     // 四捨五入取整數
     const calculated = Math.round(amount * rate);
-    
-    // 許多券商低消為 20 元，但這裡依使用者需求單純按比例計算，
-    // 若計算結果小於 1 (例如極小額零股)，至少設為 1，其餘情況依公式帶入
     const finalFee = calculated < 1 ? 1 : calculated;
 
     setFormData(prev => ({ ...prev, fee: finalFee.toString() }));
@@ -73,19 +87,28 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
             fee: Number(formData.fee)
         });
     } catch (err) {
-        alert("新增失敗，請檢查網路連線。");
+        alert("操作失敗，請檢查網路連線。");
     } finally {
         setLoading(false);
     }
   };
 
-  // 統一輸入框樣式：固定高度、內距縮小、移除預設外觀
   const inputClassName = "w-full h-[42px] bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm appearance-none";
 
   return (
-    <div className="p-4 h-full flex flex-col justify-center max-w-lg mx-auto">
-      <div className="bg-cardBg rounded-3xl p-6 shadow-2xl border border-slate-700">
-        <h2 className="text-2xl font-bold text-white mb-6 text-center">新增交易</h2>
+    <div className="p-4 h-full flex flex-col justify-center max-w-lg mx-auto animate-fade-in">
+      <div className="bg-cardBg rounded-3xl p-6 shadow-2xl border border-slate-700 relative">
+        <button 
+            onClick={onCancel}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors"
+        >
+            <X size={20} />
+        </button>
+
+        <h2 className="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2">
+            {initialData ? '編輯交易' : '新增交易'}
+            {initialData && <span className="text-xs font-normal text-slate-500 bg-slate-800 px-2 py-1 rounded">ID: {initialData.id}</span>}
+        </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -218,8 +241,8 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel }) => {
                 disabled={loading}
                 className="flex-1 bg-white text-slate-900 py-3 rounded-xl font-bold hover:bg-slate-100 flex justify-center items-center gap-2 text-sm h-[48px]"
             >
-                {loading ? <Loader2 className="animate-spin" size={18} /> : <PlusCircle size={18} />}
-                確認新增
+                {loading ? <Loader2 className="animate-spin" size={18} /> : (initialData ? <Save size={18} /> : <PlusCircle size={18} />)}
+                {initialData ? '儲存變更' : '確認新增'}
             </button>
           </div>
         </form>
