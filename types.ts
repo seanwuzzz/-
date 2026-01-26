@@ -1,9 +1,4 @@
 
-export interface User {
-  email: string;
-  name: string;
-  picture: string;
-}
 
 export interface Transaction {
   id: string;
@@ -69,7 +64,6 @@ export interface StockNews {
 export interface AppSettings {
   googleScriptUrl: string;
   useDemoData: boolean;
-  googleClientId?: string; // 新增: 用於 Google Sign-In
 }
 
 export enum Tab {
