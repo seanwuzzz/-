@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
 import { GAS_SCRIPT_TEMPLATE, APP_VERSION } from '../constants';
-import { Save, Copy, Check, AlertCircle, Link, Clock } from 'lucide-react';
+import { Save, Copy, Check, AlertCircle, Link, Clock, X, Clipboard } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
@@ -30,6 +30,21 @@ const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName, lastUpda
     navigator.clipboard.writeText(GAS_SCRIPT_TEMPLATE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleClearUrl = () => {
+    handleChange('googleScriptUrl', '');
+  };
+
+  const handlePasteUrl = async () => {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+            handleChange('googleScriptUrl', text);
+        }
+    } catch (e) {
+        setError("無法讀取剪貼簿，請手動貼上");
+    }
   };
 
   const handleSave = () => {
@@ -64,13 +79,36 @@ const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName, lastUpda
             {!localSettings.useDemoData && (
                 <div className="space-y-2 animate-slide-down">
                     <label className="text-xs text-slate-400">Google Apps Script URL (Web App)</label>
-                    <input
-                        type="text"
-                        value={localSettings.googleScriptUrl}
-                        onChange={(e) => handleChange('googleScriptUrl', e.target.value)}
-                        placeholder="https://script.google.com/macros/s/..."
-                        className={`w-full bg-slate-800 border rounded-lg p-3 text-white focus:outline-none text-sm transition-colors ${error ? 'border-twRed' : 'border-slate-600 focus:border-blue-500'}`}
-                    />
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={localSettings.googleScriptUrl}
+                            onChange={(e) => handleChange('googleScriptUrl', e.target.value)}
+                            placeholder="https://script.google.com/macros/s/..."
+                            className={`w-full bg-slate-800 border rounded-lg pl-3 pr-20 py-3 text-white focus:outline-none text-sm transition-colors ${error ? 'border-twRed' : 'border-slate-600 focus:border-blue-500'}`}
+                        />
+                        {/* Action Buttons inside Input */}
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                            {localSettings.googleScriptUrl && (
+                                <button 
+                                    type="button" 
+                                    onClick={handleClearUrl}
+                                    className="p-1.5 text-slate-500 hover:text-twRed hover:bg-slate-700/50 rounded-md transition-all active:scale-90"
+                                    title="清除"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
+                            <button 
+                                type="button" 
+                                onClick={handlePasteUrl}
+                                className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-slate-700/50 rounded-md transition-all active:scale-90"
+                                title="貼上"
+                            >
+                                <Clipboard size={16} />
+                            </button>
+                        </div>
+                    </div>
                     
                     {/* Status Cards */}
                     {(linkedSheetName || lastUpdated) && (
