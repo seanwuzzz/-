@@ -1,0 +1,42 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="skyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#eff6ff;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="barGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4ade80;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16a34a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coinGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f59e0b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#skyGradient)" stroke="#16a34a" stroke-width="20"/>
+
+  <!-- Clouds (Abstract) -->
+  <path d="M100 280 Q 150 200 250 240 T 400 220" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" opacity="0.5"/>
+  <path d="M120 320 Q 180 260 280 300" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Bars -->
+  <!-- Bar 1 -->
+  <rect x="136" y="280" width="40" height="120" rx="8" fill="url(#barGradient)" stroke="#14532d" stroke-width="2"/>
+  <!-- Bar 2 -->
+  <rect x="196" y="220" width="40" height="180" rx="8" fill="url(#barGradient)" stroke="#14532d" stroke-width="2"/>
+  <!-- Bar 3 -->
+  <rect x="256" y="160" width="40" height="240" rx="8" fill="url(#barGradient)" stroke="#14532d" stroke-width="2"/>
+  <!-- Bar 4 -->
+  <rect x="316" y="100" width="40" height="300" rx="8" fill="url(#barGradient)" stroke="#14532d" stroke-width="2"/>
+
+  <!-- Arrow -->
+  <path d="M136 260 L 350 80" stroke="#facc15" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M270 80 L 350 80 L 350 160" stroke="#facc15" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Coin -->
+  <circle cx="390" cy="180" r="60" fill="url(#coinGradient)" stroke="#b45309" stroke-width="4"/>
+  <circle cx="390" cy="180" r="45" fill="none" stroke="#fcd34d" stroke-width="4"/>
+  <text x="390" y="205" font-family="Arial, sans-serif" font-weight="900" font-size="70" text-anchor="middle" fill="#92400e">$</text>
+</svg>
