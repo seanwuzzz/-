@@ -400,7 +400,10 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-bold text-slate-300 w-16 truncate">{pos.name}</span>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="text-right flex items-center justify-end gap-2">
+                                            <span className={`text-[10px] font-medium opacity-70 ${getColor(pos.unrealizedPL)}`}>
+                                                {pos.unrealizedPLPercent > 0 ? '+' : ''}{pos.unrealizedPLPercent.toFixed(2)}%
+                                            </span>
                                             <span className={`text-xs font-bold ${getColor(pos.unrealizedPL)}`}>
                                                 {isProfit ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}
                                             </span>

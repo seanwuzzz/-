@@ -8,7 +8,7 @@ import AddTransaction from './components/AddTransaction';
 import Settings from './components/Settings';
 import PortfolioAnalysis from './components/PortfolioAnalysis';
 import HistoryList from './components/HistoryList';
-import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock, Loader2, Briefcase, Timer } from 'lucide-react';
+import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock, Loader2, Briefcase, Timer, Moon, Sun } from 'lucide-react';
 
 const AUTO_REFRESH_SECONDS = 300; // 5分鐘自動刷新
 
@@ -22,6 +22,9 @@ function App() {
   const [stockNews, setStockNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [sheetName, setSheetName] = useState<string | null>(null);
+  
+  // 市場狀態
+  const [marketStatus, setMarketStatus] = useState({ isOpen: false, canRefresh: false });
   
   // 自動刷新倒數
   const [timeLeft, setTimeLeft] = useState(AUTO_REFRESH_SECONDS);
@@ -41,6 +44,38 @@ function App() {
         return { googleScriptUrl: '', useDemoData: true };
     }
   });
+
+  // 計算台股市場狀態 (UTC+8)
+  const checkMarketStatus = useCallback(() => {
+    const now = new Date();
+    // 轉換為 UTC+8 時間
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const twTime = new Date(utc + (3600000 * 8));
+    
+    const day = twTime.getDay(); // 0 (Sun) - 6 (Sat)
+    const hour = twTime.getHours();
+    const minute = twTime.getMinutes();
+    const currentMinutes = hour * 60 + minute;
+
+    // 判斷邏輯：
+    // 1. 必須是平日 (週一至週五)
+    // 2. 開盤: 09:00 (540分) ~ 13:30 (810分)
+    // 3. 刷新: 09:00 (540分) ~ 14:00 (840分) -> 開盤期間 + 收盤後30分鐘緩衝
+    const isWeekday = day >= 1 && day <= 5;
+    const isOpen = isWeekday && currentMinutes >= 540 && currentMinutes <= 810;
+    const canRefresh = isWeekday && currentMinutes >= 540 && currentMinutes < 840;
+
+    return { isOpen, canRefresh };
+  }, []);
+
+  // 定期檢查市場狀態 (每分鐘)
+  useEffect(() => {
+    setMarketStatus(checkMarketStatus()); // Initial check
+    const timer = setInterval(() => {
+        setMarketStatus(checkMarketStatus());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [checkMarketStatus]);
 
   const fetchData = useCallback(async (forceSettings?: AppSettings, isManualRefresh = false) => {
     const currentSettings = forceSettings || settings;
@@ -109,7 +144,7 @@ function App() {
     }
   }, [settings]);
 
-  // 抓取新聞邏輯
+  // 抓取新聞邏輯 (省略...保持原樣)
   const fetchNews = async (symbol: string) => {
     if (settings.useDemoData) {
         setNewsLoading(true);
@@ -137,7 +172,6 @@ function App() {
         const data = await res.json();
         
         if (Array.isArray(data)) {
-            // 依照時間排序 (由新到舊)
             const sortedData = data.sort((a: any, b: any) => (b._ts || 0) - (a._ts || 0));
             setStockNews(sortedData);
         } else {
@@ -166,12 +200,15 @@ function App() {
     }
   }, [fetchData, settings.googleScriptUrl, settings.useDemoData]);
 
-  // 倒數計時器邏輯
+  // 倒數計時器邏輯 (加入市場時間判斷)
   useEffect(() => {
     if (!settings.googleScriptUrl && !settings.useDemoData) return;
     
     // 如果正在載入中，不進行倒數
     if (loading) return;
+
+    // 如果不在自動刷新時段 (09:00 - 14:00)，且不是 Demo 模式，則不倒數
+    if (!marketStatus.canRefresh && !settings.useDemoData) return;
 
     const timer = setInterval(() => {
         setTimeLeft((prev) => {
@@ -181,7 +218,7 @@ function App() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [loading, settings]);
+  }, [loading, settings, marketStatus.canRefresh]);
 
   // 當倒數歸零時觸發刷新
   useEffect(() => {
@@ -194,10 +231,8 @@ function App() {
     if (settings.useDemoData) {
         const newTx = { ...txData, id: Math.random().toString(36).substr(2, 9) };
         if (editingTransaction) {
-            // Demo Mode Edit
             setTransactions(prev => prev.map(t => t.id === editingTransaction.id ? { ...txData, id: editingTransaction.id } : t));
         } else {
-            // Demo Mode Add
             setTransactions(prev => [...prev, newTx]);
         }
         setActiveTab(Tab.HOME);
@@ -207,7 +242,6 @@ function App() {
 
     if (!settings.googleScriptUrl) return;
 
-    // 準備 POST Payload
     const payload = {
         ...txData,
         stockSymbol: txData.symbol,
@@ -215,8 +249,8 @@ function App() {
         shares: txData.shares,
         pricePerShare: txData.price,
         fees: txData.fee,
-        id: editingTransaction ? editingTransaction.id : new Date().getTime().toString(), // Update 用舊 ID, Create 用新 ID
-        action: editingTransaction ? 'UPDATE' : 'CREATE' // 判斷動作
+        id: editingTransaction ? editingTransaction.id : new Date().getTime().toString(),
+        action: editingTransaction ? 'UPDATE' : 'CREATE'
     };
 
     try {
@@ -276,7 +310,6 @@ function App() {
     localStorage.setItem('twStockSettings', JSON.stringify(newSettings));
     setSettings(newSettings);
     setActiveTab(Tab.HOME);
-    // 強制傳入新設定並刷新，fetchData 會重置 Timer
     fetchData(newSettings, true);
   };
 
@@ -311,9 +344,9 @@ function App() {
             </div>
             
             <div className="flex items-center gap-3">
-                {/* 倒數計時器 */}
-                {!loading && (settings.googleScriptUrl || settings.useDemoData) && (
-                    <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded-full border border-slate-700">
+                {/* 倒數計時器 (只在可刷新時段或Demo模式顯示) */}
+                {!loading && (settings.googleScriptUrl || settings.useDemoData) && (marketStatus.canRefresh || settings.useDemoData) && (
+                    <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400 bg-slate-800/50 px-2 py-1 rounded-full border border-slate-700 animate-fade-in">
                         <Timer size={10} />
                         {formatTime(timeLeft)}
                     </div>
@@ -333,14 +366,14 @@ function App() {
       )}
 
       <main className={`max-w-md mx-auto min-h-screen relative overflow-x-hidden transition-opacity duration-500 ${loading ? 'opacity-30' : 'opacity-100'}`}>
-        {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} onStockClick={(s) => { setFilterSymbol(s); setActiveTab(Tab.HISTORY); }} />}
+        {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} onStockClick={(s) => { setFilterSymbol(s); setActiveTab(Tab.HISTORY); }} isMarketOpen={marketStatus.isOpen} />}
         
         {activeTab === Tab.HISTORY && (
             <HistoryList 
                 transactions={processedTransactions} 
                 closedTrades={closedTrades} 
                 onDelete={handleDeleteTransaction} 
-                onEdit={handleStartEdit} // 傳遞編輯函數
+                onEdit={handleStartEdit}
                 filterSymbol={filterSymbol} 
                 onClearFilter={() => setFilterSymbol(null)} 
                 news={stockNews} 
@@ -354,7 +387,7 @@ function App() {
             <AddTransaction 
                 onAdd={handleAddTransaction} 
                 onCancel={handleCancelEdit} 
-                initialData={editingTransaction} // 傳遞編輯資料
+                initialData={editingTransaction} 
             />
         )}
         
