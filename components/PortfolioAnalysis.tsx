@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { PortfolioPosition, PortfolioSummary, Transaction, ProcessedTransaction } from '../types';
-import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown, MousePointer2, ChevronRight } from 'lucide-react';
+import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown, MousePointer2, ChevronRight, ShieldCheck, ZapOff } from 'lucide-react';
 
 interface Props {
   positions: PortfolioPosition[];
@@ -179,18 +179,45 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     return { total, lastMonthCount, weeklyFreq };
   }, [transactions]);
 
-  // --- Tab 5: Insights Logic ---
+  // --- Tab 5: Insights Logic (Beta Analysis) ---
   const insightsData = useMemo(() => {
+    // 1. 分散度評分 (Max 8分)
     const stockCount = positions.length;
     const sectorCount = allocationData.sectorList.length;
-    let score = Math.min(10, (stockCount * 0.5) + (sectorCount * 1.5));
-    const costGapList = positions.map(pos => ({
-        name: pos.name,
-        gap: ((pos.currentPrice - pos.avgCost) / pos.avgCost) * 100
-    })).sort((a, b) => b.gap - a.gap);
+    const diversificationScore = Math.min(8, (stockCount * 0.5) + (sectorCount * 1.5));
+    
+    // 2. Beta 評分 (Max 2分) - 鼓勵穩健 (0.8 ~ 1.2 最佳)
     const portfolioBeta = summary.portfolioBeta;
-    let betaDesc = portfolioBeta < 0.8 ? "低波動 (保守)" : portfolioBeta > 1.2 ? "高波動 (積極)" : "與大盤同步";
-    return { score, costGapList, portfolioBeta, betaDesc };
+    let betaScore = 0;
+    const distFromOne = Math.abs(portfolioBeta - 1);
+    
+    if (distFromOne <= 0.2) betaScore = 2;       // 0.8 - 1.2
+    else if (distFromOne <= 0.5) betaScore = 1;  // 0.5 - 1.5
+    // Else 0 (Extreme Beta)
+
+    const score = Math.min(10, diversificationScore + betaScore);
+    
+    let betaDesc = "";
+    let volatilityText = "";
+    
+    if (portfolioBeta < 0.8) {
+        betaDesc = "防禦型 (低波動)";
+        volatilityText = `比大盤波動低 ${Math.round((1 - portfolioBeta) * 100)}%`;
+    } else if (portfolioBeta > 1.2) {
+        betaDesc = "積極型 (高波動)";
+        volatilityText = `比大盤波動高 ${Math.round((portfolioBeta - 1) * 100)}%`;
+    } else {
+        betaDesc = "市場型 (同步大盤)";
+        volatilityText = "與大盤走勢接近";
+    }
+
+    // Sort positions by Beta
+    const sortedByBeta = [...positions].map(p => ({
+        ...p,
+        beta: p.beta || 1 // fallback
+    })).sort((a, b) => b.beta - a.beta);
+
+    return { score, portfolioBeta, betaDesc, volatilityText, sortedByBeta };
   }, [positions, allocationData, summary]);
 
   // --- Helpers ---
@@ -202,7 +229,18 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     if (count === 3) return 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]';
     return 'bg-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.8)]';
   };
-  const getBetaColor = (beta: number) => beta < 0.8 ? 'text-twGreen' : beta > 1.2 ? 'text-twRed' : 'text-blue-400';
+  
+  const getBetaColorClass = (beta: number) => {
+      if (beta > 1.2) return 'text-twRed bg-twRed/10 border-twRed/20';
+      if (beta < 0.8) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+      return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+  };
+
+  const getBetaLabel = (beta: number) => {
+      if (beta > 1.2) return { text: '積極', icon: <Flame size={10} /> };
+      if (beta < 0.8) return { text: '防禦', icon: <ShieldCheck size={10} /> };
+      return { text: '穩健', icon: <Activity size={10} /> };
+  };
 
   return (
     <div className="p-4 pb-24 space-y-6 animate-fade-in">
@@ -542,42 +580,144 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                     <h3 className="text-sm font-bold text-white flex items-center gap-2"><BrainCircuit size={16} className="text-pink-400" /> 投資組合診斷</h3>
                     <div className="bg-slate-800 px-3 py-1 rounded-full text-[10px] font-bold text-pink-400 border border-pink-400/20">健康度: {insightsData.score.toFixed(1)} / 10</div>
                 </div>
-                <div className="space-y-4">
+                
+                <div className="space-y-6">
+                    {/* 投資組合 Beta 儀表板 */}
                     <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 relative overflow-hidden">
                         <div className="flex justify-between items-start mb-3 relative z-10">
-                            <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5"><Zap size={14} className="text-yellow-400" /> 風險係數 (Beta)</h4>
-                            <span className={`text-lg font-bold ${getBetaColor(insightsData.portfolioBeta)}`}>{insightsData.portfolioBeta.toFixed(2)}</span>
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5"><Zap size={14} className="text-yellow-400" /> 整體風險係數 (Beta) <span className="text-[10px] text-slate-500 font-normal ml-1">(近半年)</span></h4>
+                                <p className="text-[10px] text-slate-400 mt-1">{insightsData.volatilityText}</p>
+                            </div>
+                            <span className={`text-2xl font-bold ${insightsData.portfolioBeta > 1.2 ? 'text-twRed' : insightsData.portfolioBeta < 0.8 ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                {insightsData.portfolioBeta.toFixed(2)}
+                            </span>
                         </div>
                         <div className="relative h-2 bg-slate-800 rounded-full mb-2 overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-r from-twGreen via-blue-500 to-twRed opacity-30"></div>
-                            <div className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] transition-all duration-1000" style={{ left: `${Math.min(100, Math.max(0, (insightsData.portfolioBeta / 2) * 100))}%` }} />
+                            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-blue-500 to-red-500 opacity-50"></div>
+                            {/* Marker */}
+                            <div className="absolute top-0 bottom-0 w-1.5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] transition-all duration-1000 border border-black/20 rounded-full z-10" style={{ left: `${Math.min(100, Math.max(0, (insightsData.portfolioBeta / 2) * 100))}%` }} />
                         </div>
-                        <div className="flex justify-between text-[9px] text-slate-500 font-mono mb-2"><span>0.0</span><span>1.0 (大盤)</span><span>2.0+</span></div>
-                        <p className="text-[10px] text-slate-400 leading-relaxed">您的投資組合呈現<span className={`font-bold ${getBetaColor(insightsData.portfolioBeta)}`}> {insightsData.betaDesc} </span>特性。</p>
+                        <div className="flex justify-between text-[9px] text-slate-500 font-mono">
+                            <span>0.5 (低)</span>
+                            <span>1.0 (大盤)</span>
+                            <span>1.5 (高)</span>
+                        </div>
                     </div>
-                    <div className="p-3 bg-slate-900/50 rounded-xl border border-white/5">
-                        <h4 className="text-xs font-bold text-slate-200 mb-2 flex items-center gap-1.5"><Target size={14} className="text-blue-400" /> 安全邊際 (市價 vs 成本)</h4>
-                        {insightsData.costGapList.length > 0 ? (
-                            <div className="space-y-3">
-                                {insightsData.costGapList.slice(0, 5).map(item => (
-                                    <div key={item.name} className="flex items-center gap-2">
-                                        <span className="text-[10px] text-slate-400 w-16 truncate">{item.name}</span>
-                                        <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
-                                            <div className={`h-full ${item.gap >= 0 ? 'bg-blue-500' : 'bg-slate-600'}`} style={{ width: `${Math.min(100, Math.abs(item.gap))}%` }} />
+
+                    {/* 個股 Beta 風險屬性列表 (New) */}
+                    <div>
+                        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-1.5">
+                            <Target size={14} className="text-blue-400" /> 個股波動風險屬性 <span className="text-[10px] text-slate-500 font-normal ml-1">(近半年)</span>
+                        </h4>
+                        <div className="space-y-2">
+                            {insightsData.sortedByBeta.map((pos) => {
+                                const { text, icon } = getBetaLabel(pos.beta);
+                                const colorClass = getBetaColorClass(pos.beta);
+                                const weight = summary.totalAssets > 0 ? (pos.currentValue / summary.totalAssets) * 100 : 0;
+                                
+                                return (
+                                    <div key={pos.symbol} className="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                            {/* Beta Box */}
+                                            <div className={`w-10 h-10 shrink-0 rounded-lg flex flex-col items-center justify-center font-bold text-xs ${colorClass}`}>
+                                                <span>{pos.beta.toFixed(2)}</span>
+                                                <span className="text-[8px] opacity-70">Beta</span>
+                                            </div>
+                                            
+                                            {/* Stock Info + Weight Bar */}
+                                            <div className="flex flex-col flex-1 min-w-0 mr-4">
+                                                <div className="flex justify-between items-baseline mb-0.5">
+                                                    <span className="text-xs font-bold text-slate-200 truncate">{pos.name}</span>
+                                                    <span className={`text-[9px] flex items-center gap-1 font-medium ${colorClass} shrink-0`}>
+                                                        {icon} {text}
+                                                    </span>
+                                                </div>
+                                                
+                                                {/* Weight Visual Bar */}
+                                                <div className="flex flex-col w-full gap-0.5">
+                                                     <div className="flex justify-between items-end">
+                                                        <span className="text-[8px] text-slate-500">權重</span>
+                                                        <span className="text-[8px] text-slate-400 font-mono">{weight.toFixed(1)}%</span>
+                                                     </div>
+                                                     <div className="h-1 w-full bg-slate-700/50 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-blue-500/60 rounded-full" style={{ width: `${weight}%` }}></div>
+                                                     </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <span className={`text-[10px] font-bold ${getColor(item.gap)} w-12 text-right`}>{item.gap > 0 ? '+' : ''}{item.gap.toFixed(1)}%</span>
+                                        
+                                        {/* Beta vs Market Bar */}
+                                        <div className="flex flex-col items-end gap-1 w-16 shrink-0 border-l border-slate-700/50 pl-2">
+                                            <span className="text-[8px] text-slate-500 mb-0.5">vs 大盤</span>
+                                            <div className="w-full h-1.5 bg-slate-700 rounded-full relative overflow-hidden">
+                                                {/* Center Line at 1.0 (mapped to 50% visually for 0.5~1.5 range) */}
+                                                <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-500 z-10"></div>
+                                                <div 
+                                                    className={`absolute h-full rounded-full ${pos.beta > 1 ? 'bg-red-400' : 'bg-emerald-400'}`}
+                                                    style={{
+                                                        left: pos.beta > 1 ? '50%' : `${Math.max(0, (pos.beta / 2) * 100)}%`,
+                                                        width: `${Math.abs(pos.beta - 1) * 50}%` // Simple visual scale
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
-                        ) : <div className="text-xs text-slate-500 italic">無資料</div>}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </section>
+
             <section className="bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 flex gap-3">
-                <Info className="text-blue-400 shrink-0" size={18} />
-                <div className="text-[11px] text-slate-400 leading-relaxed">
-                    {insightsData.score < 5 ? "您的投資組合過於集中。建議適度增加不同產業的持股以分散風險。" : "您的投資組合分散程度良好，具有較佳的抗波動能力。"}
-                    {insightsData.costGapList.length > 0 && <span>目前最大潛在獲利股為 <span className="text-white font-bold">{insightsData.costGapList[0]?.name}</span>。</span>}
+                <Info className="text-blue-400 shrink-0 mt-0.5" size={18} />
+                <div className="text-[11px] text-slate-400 leading-relaxed space-y-3 w-full">
+                    {/* Beta Section */}
+                    <div>
+                        <h5 className="text-slate-200 font-bold mb-1 flex items-center gap-2">
+                             風險係數 (Beta) 說明
+                        </h5>
+                        <p className="opacity-80">
+                            Beta 值係計算過去六個月的股價波動與大盤之關聯性。
+                        </p>
+                        <ul className="list-disc list-inside mt-1 ml-1 space-y-0.5 opacity-80">
+                            <li><span className="text-slate-300">Beta = 1</span>：波動風險與大盤相當。</li>
+                            <li><span className="text-slate-300">Beta &gt; 1</span>：波動大於大盤 (積極型/高風險)。</li>
+                            <li><span className="text-slate-300">Beta &lt; 1</span>：波動小於大盤 (保守型/低風險)。</li>
+                        </ul>
+                         <p className="mt-2 text-blue-300/90 italic">
+                            {insightsData.portfolioBeta > 1.1 && "您的組合波動較高，多頭時獲利潛力大，但空頭風險也較高。"}
+                            {insightsData.portfolioBeta < 0.9 && "您的組合偏向保守，抗跌能力較強，但在大漲行情中可能漲幅較溫和。"}
+                            {insightsData.portfolioBeta >= 0.9 && insightsData.portfolioBeta <= 1.1 && "您的組合波動與大盤相當，屬於穩健型配置。"}
+                        </p>
+                    </div>
+
+                    <div className="h-px bg-slate-700/50 w-full"></div>
+
+                    {/* Health Score Section */}
+                    <div>
+                        <h5 className="text-slate-200 font-bold mb-1 flex items-center gap-2">
+                             健康度評分機制
+                        </h5>
+                        <p className="opacity-80">
+                            評分 (滿分 10 分) 綜合考量風險分散與波動穩定性。
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                                <span className="block text-[9px] text-slate-500 mb-0.5">持股與產業 (Max 8分)</span>
+                                <span className="text-slate-300">持股與產業分散度越高，分數越高。</span>
+                            </div>
+                            <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                                <span className="block text-[9px] text-slate-500 mb-0.5">Beta 穩定性 (Max 2分)</span>
+                                <span className="text-slate-300">整體波動接近市場 (0.8~1.2) 得分較高。</span>
+                            </div>
+                        </div>
+                         <p className="mt-2 text-pink-400 font-medium">
+                            當前評分: {insightsData.score.toFixed(1)} / 10 
+                            {insightsData.score < 6 ? ' (建議增加多樣性或調整風險屬性)' : ' (結構尚屬健康)'}
+                        </p>
+                    </div>
                 </div>
             </section>
         </div>

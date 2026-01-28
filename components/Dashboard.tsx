@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
@@ -119,8 +119,14 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         </div>
                         <div className="text-right flex items-start gap-2">
                             <div>
-                                <div className="text-lg font-bold text-white">
-                                    {pos.currentPrice > 0 ? `$${pos.currentPrice}` : <span className="text-slate-500 text-sm">更新中...</span>}
+                                <div className="text-lg font-bold text-white flex justify-end">
+                                    {pos.currentPrice > 0 ? (
+                                        `$${pos.currentPrice}`
+                                    ) : (
+                                        <span className="text-slate-400 text-xs flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-md animate-pulse">
+                                            <Loader2 size={12} className="animate-spin" /> 載入中...
+                                        </span>
+                                    )}
                                 </div>
                                 {pos.currentPrice > 0 && (
                                     <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1 ${getBgColor(pos.dayChangePercent)} ${getColor(pos.dayChangePercent)}`}>
