@@ -121,13 +121,35 @@ function App() {
         }
 
         if (data.quotes) {
-             setPrices(data.quotes.map((q: any) => ({
-                 symbol: String(q.symbol).trim(),
-                 price: Number(q.price),
-                 changePercent: Number(q.changePercent),
-                 sector: q.sector || '未分類',
-                 beta: q.beta
-             })));
+             // 使用 functional update 以便存取先前的 prices 狀態
+             setPrices(prevPrices => {
+                 return data.quotes.map((q: any) => {
+                     const symbol = String(q.symbol).trim();
+                     const newPrice = Number(q.price);
+                     const changePercent = Number(q.changePercent);
+                     
+                     // 關鍵邏輯：檢查新價格是否有效
+                     // 如果新價格是 0、NaN 或無效，且我們有舊資料，就沿用舊資料
+                     // 這能防止 Google Sheets 正在計算(Loading)時回傳 0 導致畫面閃爍
+                     const isValidPrice = !isNaN(newPrice) && newPrice > 0;
+                     
+                     if (!isValidPrice) {
+                         const oldData = prevPrices.find(p => p.symbol === symbol);
+                         if (oldData) {
+                             // console.warn(`Keeping old price for ${symbol} because new price is ${newPrice}`);
+                             return oldData;
+                         }
+                     }
+
+                     return {
+                         symbol: symbol,
+                         price: isValidPrice ? newPrice : 0, // 真的沒舊資料才放 0
+                         changePercent: isNaN(changePercent) ? 0 : changePercent,
+                         sector: q.sector || '未分類',
+                         beta: q.beta
+                     };
+                 });
+             });
         }
 
         if (data.sheetName) {
@@ -378,7 +400,8 @@ function App() {
                 filterSymbol={filterSymbol} 
                 onClearFilter={() => setFilterSymbol(null)} 
                 news={stockNews} 
-                newsLoading={newsLoading} 
+                newsLoading={newsLoading}
+                prices={prices}
             />
         )}
         

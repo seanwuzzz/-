@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ProcessedTransaction, StockNews, ClosedTrade, Transaction } from '../types';
+import { ProcessedTransaction, StockNews, ClosedTrade, Transaction, StockPrice } from '../types';
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
@@ -22,7 +22,8 @@ import {
   Pencil,
   Search,
   Filter,
-  Calendar
+  Calendar,
+  TrendingUp
 } from 'lucide-react';
 
 interface Props {
@@ -34,6 +35,7 @@ interface Props {
   onClearFilter?: () => void;
   news?: StockNews[];
   newsLoading?: boolean;
+  prices?: StockPrice[]; // Added prices for current P/L calc
 }
 
 type SortField = 'date' | 'amount';
@@ -49,7 +51,8 @@ const HistoryList: React.FC<Props> = ({
   filterSymbol, 
   onClearFilter,
   news = [],
-  newsLoading = false
+  newsLoading = false,
+  prices = []
 }) => {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -79,12 +82,7 @@ const HistoryList: React.FC<Props> = ({
     if (filterSymbol) {
         setKeyword(filterSymbol);
         setIsNewsExpanded(false);
-        // 如果是外部觸發的篩選，不一定需要展開篩選面板，保持簡潔
-        // setShowFilters(true); 
-    } else {
-        // 如果外部清除 filter (例如點擊 Dashboard 空白處或重整)，這裡不一定要清空，視需求而定
-        // 但為了 UX 一致性，如果外部 filterSymbol 變更，我們通常跟隨
-    }
+    } 
   }, [filterSymbol]);
 
   const handleDeleteClick = async (e: React.MouseEvent, id: string) => {
@@ -172,7 +170,6 @@ const HistoryList: React.FC<Props> = ({
   const filteredClosedTrades = useMemo(() => {
       let result = [...closedTrades];
 
-      // 1. 關鍵字
       if (keyword) {
           const lowerKw = keyword.toLowerCase();
           result = result.filter(t => 
@@ -181,7 +178,6 @@ const HistoryList: React.FC<Props> = ({
           );
       }
       
-      // 注意: ClosedTrade 是一組買賣，通常我們篩選的是「賣出日期」(實現日期)
       if (startDate) {
           result = result.filter(t => t.sellDate >= startDate);
       }
@@ -189,11 +185,8 @@ const HistoryList: React.FC<Props> = ({
           result = result.filter(t => t.sellDate <= endDate);
       }
 
-      // FilterType 對已實現損益沒有意義 (因為一定是賣出)，所以忽略
-
-      // 預設依賣出日期排序
       return result.sort((a, b) => new Date(b.sellDate).getTime() - new Date(a.sellDate).getTime());
-  }, [closedTrades, keyword, startDate, endDate]); // filterType 不影響此處
+  }, [closedTrades, keyword, startDate, endDate]);
 
   const inputClass = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors";
 
@@ -400,6 +393,18 @@ const HistoryList: React.FC<Props> = ({
                 </div>
             ) : (
                 sortedTransactions.map((tx) => {
+                    const priceData = prices?.find(p => p.symbol === tx.symbol);
+                    const currentPrice = priceData ? priceData.price : 0;
+                    
+                    // 計算現價試算 (只針對買進)
+                    let currentValCalc = null;
+                    if (tx.type === 'BUY' && currentPrice > 0) {
+                        const marketValue = tx.shares * currentPrice;
+                        const unrealized = marketValue - tx.totalAmount;
+                        const roi = tx.totalAmount > 0 ? (unrealized / tx.totalAmount) * 100 : 0;
+                        currentValCalc = { unrealized, roi };
+                    }
+
                     return (
                         <div key={tx.id} className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm relative transition-all">
                         <div className="absolute -top-1 -right-1 z-10 flex gap-1">
@@ -450,11 +455,23 @@ const HistoryList: React.FC<Props> = ({
                                 </div>
                                 <div className="text-right">
                                     <div className="text-sm font-bold text-white">{tx.shares.toLocaleString()} 股</div>
-                                    <div className="flex items-center gap-2 mt-1 justify-end">
+                                    <div className="flex flex-col items-end gap-1 mt-1 justify-end">
                                         <span className="text-[10px] text-slate-500">{tx.type === 'BUY' ? '總支出' : '總拿回'}: ${tx.totalAmount.toLocaleString()}</span>
+                                        
+                                        {/* 賣出交易：顯示已實現損益 */}
                                         {tx.realizedPL !== undefined && (
                                             <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${getBgColor(tx.realizedPL)} ${getColor(tx.realizedPL)}`}>
                                                 {tx.realizedPL >= 0 ? '+' : ''}{Math.abs(Math.round(tx.realizedPL)).toLocaleString()}
+                                            </div>
+                                        )}
+                                        
+                                        {/* 買進交易：顯示現價試算 (如果還有在監控中) */}
+                                        {currentValCalc && (
+                                            <div className="flex items-center gap-1.5 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 mt-0.5">
+                                                <span className="text-[9px] text-slate-500">現價 P/L</span>
+                                                <span className={`text-[10px] font-bold ${getColor(currentValCalc.unrealized)}`}>
+                                                    {currentValCalc.unrealized > 0 ? '+' : ''}{Math.round(currentValCalc.unrealized).toLocaleString()} ({currentValCalc.roi > 0 ? '+' : ''}{currentValCalc.roi.toFixed(1)}%)
+                                                </span>
                                             </div>
                                         )}
                                     </div>
