@@ -275,22 +275,22 @@ const HistoryList: React.FC<Props> = ({
 
                     {/* 日期範圍 */}
                     <div className="grid grid-cols-2 gap-2">
-                        <div>
+                        <div className="min-w-0">
                             <label className="text-[10px] text-slate-500 mb-1 block">起始日期</label>
                             <input 
                                 type="date" 
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className={inputClass} 
+                                className={`${inputClass} appearance-none`}
                             />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <label className="text-[10px] text-slate-500 mb-1 block">結束日期</label>
                             <input 
                                 type="date" 
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className={inputClass} 
+                                className={`${inputClass} appearance-none`}
                             />
                         </div>
                     </div>

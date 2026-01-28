@@ -8,7 +8,7 @@ import AddTransaction from './components/AddTransaction';
 import Settings from './components/Settings';
 import PortfolioAnalysis from './components/PortfolioAnalysis';
 import HistoryList from './components/HistoryList';
-import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock, Loader2, Briefcase, Timer, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, Plus, Settings as SettingsIcon, RefreshCw, BarChart2, History, Clock, Loader2, Timer, Moon, Sun } from 'lucide-react';
 
 const AUTO_REFRESH_SECONDS = 300; // 5分鐘自動刷新
 
@@ -359,9 +359,6 @@ function App() {
       {activeTab !== Tab.ADD && (
         <header className="sticky top-0 z-50 bg-darkBg/80 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex justify-between items-center">
             <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20">
-                    <Briefcase size={16} className="text-white" />
-                </div>
                 <h1 className="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">投資管家</h1>
             </div>
             
