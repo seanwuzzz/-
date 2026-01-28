@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
@@ -148,6 +148,14 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
             ))}
             </div>
         )}
+      </div>
+
+      {/* Disclaimer */}
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500/60 text-[10px] leading-relaxed">
+          <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+          <span>
+              報價資訊僅供參考，可能存在延遲，實際成交價格請以證券商系統為準。
+          </span>
       </div>
     </div>
   );
