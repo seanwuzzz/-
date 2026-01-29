@@ -14,10 +14,33 @@ const AUTO_REFRESH_SECONDS = 300; // 5分鐘自動刷新
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.HOME);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [prices, setPrices] = useState<StockPrice[]>([]);
+  
+  // 初始 Transactions 讀取 (從 LocalStorage 快取)
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const saved = localStorage.getItem('twStockTransactions');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // 初始 Prices 讀取 (從 LocalStorage 快取，避免開場 Loading 卡住)
+  const [prices, setPrices] = useState<StockPrice[]>(() => {
+    try {
+      const saved = localStorage.getItem('twStockPrices');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
   const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  
+  // 初始 LastUpdated 讀取
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(() => {
+    try {
+      const saved = localStorage.getItem('twStockLastUpdated');
+      return saved ? new Date(saved) : null;
+    } catch { return null; }
+  });
+
   const [filterSymbol, setFilterSymbol] = useState<string | null>(null);
   const [stockNews, setStockNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
@@ -108,7 +131,7 @@ function App() {
         const data = await response.json();
         
         if (data.transactions) {
-            setTransactions(data.transactions.map((t: any) => ({
+            const mappedTxs = data.transactions.map((t: any) => ({
                 id: String(t.id),
                 date: String(t.date).substring(0, 10),
                 symbol: String(t.stockSymbol).trim(),
@@ -117,13 +140,16 @@ function App() {
                 shares: Number(t.shares),
                 price: Number(t.pricePerShare),
                 fee: Number(t.fees)
-            })));
+            }));
+            setTransactions(mappedTxs);
+            // 快取交易紀錄
+            localStorage.setItem('twStockTransactions', JSON.stringify(mappedTxs));
         }
 
         if (data.quotes) {
              // 使用 functional update 以便存取先前的 prices 狀態
              setPrices(prevPrices => {
-                 return data.quotes.map((q: any) => {
+                 const newPrices = data.quotes.map((q: any) => {
                      const symbol = String(q.symbol).trim();
                      const newPrice = Number(q.price);
                      const changePercent = Number(q.changePercent);
@@ -149,6 +175,9 @@ function App() {
                          beta: q.beta
                      };
                  });
+                 // 快取股價資料
+                 localStorage.setItem('twStockPrices', JSON.stringify(newPrices));
+                 return newPrices;
              });
         }
 
@@ -156,7 +185,11 @@ function App() {
             setSheetName(data.sheetName);
         }
 
-        setLastUpdated(new Date());
+        const now = new Date();
+        setLastUpdated(now);
+        // 快取最後更新時間
+        localStorage.setItem('twStockLastUpdated', now.toISOString());
+
     } catch (error) {
         console.error("Fetch error:", error);
         if (isManualRefresh) alert("同步失敗，請檢查設定網址。");

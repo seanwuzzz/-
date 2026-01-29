@@ -56,7 +56,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
           </div>
           
           <div className="space-y-4">
+            {/* Row 1: Total Performance Stats */}
             <div className="grid grid-cols-2 gap-4">
+                {/* Total Unrealized */}
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
                     <div className="text-[10px] text-slate-500 mb-1">未實現損益 <span className="text-[8px] opacity-60">(含費用)</span></div>
                     <div className={`text-lg font-bold ${getColor(summary.totalPL)} flex flex-col leading-tight`}>
@@ -66,18 +68,38 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         </span>
                     </div>
                 </div>
+                
+                {/* Total Realized */}
                 <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                    <div className="text-[10px] text-slate-500 mb-1">今日變動</div>
-                    <div className={`text-lg font-bold ${getColor(summary.dayPL)} flex flex-col leading-tight`}>
-                        <span>{summary.dayPL > 0 ? '+' : ''}{Math.round(summary.dayPL).toLocaleString()}</span>
+                    <div className="text-[10px] text-slate-500 mb-1">累積已實現 <span className="text-[8px] opacity-60">(含費用)</span></div>
+                    <div className={`text-lg font-bold ${getColor(summary.totalRealizedPL)}`}>
+                        {summary.totalRealizedPL > 0 ? '+' : ''}{Math.round(summary.totalRealizedPL).toLocaleString()}
                     </div>
                 </div>
             </div>
             
-            <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex justify-between items-center">
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider">已實現損益 <span className="text-[8px] opacity-60">已含交易成本</span></div>
-                <div className={`text-sm font-bold ${getColor(summary.totalRealizedPL)}`}>
-                    {summary.totalRealizedPL > 0 ? '+' : ''}{Math.round(summary.totalRealizedPL).toLocaleString()}
+            {/* Row 2: Today's Performance (Combined) */}
+            <div className="bg-black/20 p-3 rounded-xl border border-white/5">
+                <div className="text-[10px] text-slate-500 mb-2 flex items-center gap-2">
+                    <span className="uppercase tracking-widest font-bold text-[9px] opacity-80">今日變動</span>
+                    <div className="h-px bg-white/10 flex-1"></div>
+                </div>
+                <div className="flex items-center">
+                    {/* Day Paper */}
+                    <div className="flex-1 pr-4 border-r border-white/10">
+                         <div className="text-[9px] text-slate-500 mb-0.5">帳面漲跌</div>
+                         <div className={`text-lg font-bold ${getColor(summary.dayPL)}`}>
+                            {summary.dayPL > 0 ? '+' : ''}{Math.round(summary.dayPL).toLocaleString()}
+                         </div>
+                    </div>
+                    
+                    {/* Day Realized */}
+                    <div className="flex-1 pl-4">
+                         <div className="text-[9px] text-slate-500 mb-0.5">已實現損益</div>
+                         <div className={`text-lg font-bold ${getColor(summary.dayRealizedPL)}`}>
+                            {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
+                         </div>
+                    </div>
                 </div>
             </div>
           </div>

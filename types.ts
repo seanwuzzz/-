@@ -1,5 +1,4 @@
 
-
 export interface Transaction {
   id: string;
   date: string;
@@ -48,7 +47,8 @@ export interface PortfolioSummary {
   totalPL: number;
   totalPLPercent: number;
   totalRealizedPL: number;
-  dayPL: number;
+  dayPL: number; // 純帳面今日變動
+  dayRealizedPL: number; // 新增: 今日已實現損益
   portfolioBeta: number; // 新增: 投資組合加權 Beta
 }
 
