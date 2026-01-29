@@ -373,12 +373,12 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                 {/* Scrollable Content Area - Optimized Layout */}
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center bg-slate-900">
                     
-                    {/* --- PREVIEW AREA START (Horizontal Card) --- */}
-                    <div className={`relative w-full rounded-2xl overflow-hidden flex flex-row border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-br from-green-900/40 via-slate-900 to-slate-900'}`}>
+                    {/* --- PREVIEW AREA START (Horizontal Card - Square Frame, Rounded Inner) --- */}
+                    <div className={`relative w-full overflow-hidden flex flex-row border border-white/10 shadow-2xl rounded-none ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-br from-green-900/40 via-slate-900 to-slate-900'}`}>
                         
                         {/* Left Column: Hero Stats */}
                         <div className="w-5/12 p-3 flex flex-col justify-center items-center border-r border-white/5 bg-black/10">
-                            <div className={`w-10 h-10 mb-2 rounded-xl flex items-center justify-center shadow-lg border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-emerald-600'}`}>
+                            <div className={`w-10 h-10 mb-2 rounded-2xl flex items-center justify-center shadow-lg border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-emerald-600'}`}>
                                 {summary.dayPL >= 0 ? <TrendingUp size={20} className="text-white" /> : <TrendingDown size={20} className="text-white" />}
                             </div>
                             <h3 className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-0.5">今日戰報</h3>
@@ -404,7 +404,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         {/* Right Column: Details */}
                         <div className="w-7/12 p-3 flex flex-col justify-between">
                             {/* Realized */}
-                            <div className="bg-slate-800/60 rounded-lg p-2 border border-white/5 flex justify-between items-center mb-2">
+                            <div className="bg-slate-800/60 rounded-xl p-2 border border-white/5 flex justify-between items-center mb-2">
                                 <span className="text-[9px] text-slate-400 font-medium">今日已實現</span>
                                 <span className={`text-[10px] font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                     {shareMaskAmount ? '****' : (
@@ -422,7 +422,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                                 </h4>
                                 <div className="space-y-1">
                                     {topPerformers.length > 0 ? topPerformers.slice(0, 3).map(p => (
-                                        <div key={p.symbol} className="flex items-center justify-between p-1.5 bg-slate-800/40 rounded border border-white/5">
+                                        <div key={p.symbol} className="flex items-center justify-between p-1.5 bg-slate-800/40 rounded-lg border border-white/5">
                                             <span className="text-[9px] font-bold text-slate-300 truncate w-14">{p.name}</span>
                                             <div className="flex items-center gap-1">
                                                 <span className={`text-[9px] font-bold tabular-nums ${getColor(p.dayChangeAmount)}`}>
@@ -436,7 +436,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
 
                              {/* Footer */}
                             <div className="flex items-center justify-end gap-1 opacity-50">
-                                <div className="w-3 h-3 rounded bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
                                     <span className="text-[6px] font-bold text-white">M</span>
                                 </div>
                                 <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
@@ -493,8 +493,11 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
       )}
       
       {/* 
-        HIDDEN CAPTURE AREA (Landscape / Horizontal)
+        HIDDEN CAPTURE AREA (Landscape / Horizontal - Square Frame, Rounded Inner)
         固定寬度 600px，高度自動，採用左右分割佈局。
+        樣式更新：
+        1. 外層: rounded-none (方框)
+        2. 內層: rounded-2xl, rounded-xl, rounded-lg, rounded-full (圓角)
       */}
       <div 
         ref={shareCaptureRef}
@@ -509,7 +512,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
         }}
         className="bg-slate-900 text-white"
       >
-        <div className={`w-full p-6 flex flex-row ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-br from-green-900/40 via-slate-900 to-slate-900'}`}>
+        <div className={`w-full p-6 flex flex-row rounded-none ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-br from-green-900/40 via-slate-900 to-slate-900'}`}>
             
             {/* Left Column: Hero Stats */}
             <div className="w-5/12 pr-6 border-r border-white/10 flex flex-col justify-center items-center">
@@ -541,8 +544,8 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
             <div className="w-7/12 pl-6 flex flex-col justify-center">
                 {/* Realized */}
                 <div className="bg-slate-800/80 rounded-xl p-3 border border-white/10 flex justify-between items-center mb-6 shadow-sm">
-                    <span className="text-xs text-slate-400 font-medium">今日已實現</span>
-                    <span className={`text-base font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    <span className="text-sm text-slate-400 font-medium">今日已實現</span>
+                    <span className={`text-lg font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                         {shareMaskAmount ? '****' : (
                             <>
                                 {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
@@ -568,7 +571,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                                             <>{p.dayChangeAmount > 0 ? '+' : ''}{Math.round(p.dayChangeAmount).toLocaleString()}</>
                                         )}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getBgColor(p.dayChangePercent)}`}>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${getBgColor(p.dayChangePercent)}`}>
                                         {p.dayChangePercent > 0 ? '+' : ''}{p.dayChangePercent.toFixed(2)}%
                                     </span>
                                 </div>
@@ -579,7 +582,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
 
                 {/* Footer */}
                 <div className="flex items-center justify-end gap-2 mt-6 opacity-60">
-                    <div className="w-5 h-5 rounded bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
                         <span className="text-[10px] font-bold text-white">M</span>
                     </div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
