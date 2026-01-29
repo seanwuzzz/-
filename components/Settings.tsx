@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings } from '../types';
 import { GAS_SCRIPT_TEMPLATE, APP_VERSION } from '../constants';
-import { Save, Copy, Check, AlertCircle, Link, Clock, X, Clipboard } from 'lucide-react';
+import { Save, Copy, Check, AlertCircle, Link, Clock, X, Clipboard, Eye, EyeOff } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
@@ -72,6 +72,21 @@ const Settings: React.FC<Props> = ({ settings, onSave, linkedSheetName, lastUpda
                     className={`w-12 h-6 rounded-full transition-colors relative active:scale-95 ${localSettings.useDemoData ? 'bg-blue-500' : 'bg-slate-600'}`}
                 >
                     <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${localSettings.useDemoData ? 'translate-x-6' : ''}`} />
+                </button>
+            </div>
+
+            {/* Default Show Balance Toggle */}
+            <div className="flex items-center justify-between">
+                <span className="text-sm flex items-center gap-2">
+                    預設顯示金額
+                    {localSettings.defaultShowBalance ? <Eye size={14} className="text-blue-400" /> : <EyeOff size={14} className="text-slate-500" />}
+                </span>
+                <button 
+                    type="button"
+                    onClick={() => handleChange('defaultShowBalance', !localSettings.defaultShowBalance)}
+                    className={`w-12 h-6 rounded-full transition-colors relative active:scale-95 ${localSettings.defaultShowBalance ? 'bg-blue-500' : 'bg-slate-600'}`}
+                >
+                    <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${localSettings.defaultShowBalance ? 'translate-x-6' : ''}`} />
                 </button>
             </div>
 

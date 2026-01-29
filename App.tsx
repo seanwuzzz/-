@@ -59,12 +59,25 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
         const saved = localStorage.getItem('twStockSettings');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // 確保新欄位有預設值
+            return {
+                ...parsed,
+                defaultShowBalance: parsed.defaultShowBalance ?? true
+            };
+        }
         const oldGuest = localStorage.getItem('twStockSettings_guest');
-        if (oldGuest) return JSON.parse(oldGuest);
-        return { googleScriptUrl: '', useDemoData: true };
+        if (oldGuest) {
+            const parsed = JSON.parse(oldGuest);
+            return {
+                ...parsed,
+                defaultShowBalance: true
+            };
+        }
+        return { googleScriptUrl: '', useDemoData: true, defaultShowBalance: true };
     } catch (e) {
-        return { googleScriptUrl: '', useDemoData: true };
+        return { googleScriptUrl: '', useDemoData: true, defaultShowBalance: true };
     }
   });
 
@@ -438,7 +451,15 @@ function App() {
       )}
 
       <main className={`max-w-md mx-auto min-h-screen relative overflow-x-hidden transition-opacity duration-500 ${loading ? 'opacity-30' : 'opacity-100'}`}>
-        {activeTab === Tab.HOME && <Dashboard summary={summary} positions={positions} onStockClick={(s) => { setFilterSymbol(s); setActiveTab(Tab.HISTORY); }} isMarketOpen={marketStatus.isOpen} />}
+        {activeTab === Tab.HOME && (
+            <Dashboard 
+                summary={summary} 
+                positions={positions} 
+                onStockClick={(s) => { setFilterSymbol(s); setActiveTab(Tab.HISTORY); }} 
+                isMarketOpen={marketStatus.isOpen} 
+                defaultShowBalance={settings.defaultShowBalance}
+            />
+        )}
         
         {activeTab === Tab.HISTORY && (
             <HistoryList 

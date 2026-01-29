@@ -85,6 +85,8 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         }));
     }
 
+    // Pie Chart Calculation
+    // Using a standard circle with r=16 (circumference ~100) for easier math
     let cumulativePercent = 0;
     const donutSegments = displayList.map(sector => {
         const percent = summary.totalAssets > 0 ? (sector.value / summary.totalAssets) : 0;
@@ -311,72 +313,115 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       {activeSubTab === AnalysisTab.ALLOCATION && (
         <div className="space-y-4 animate-slide-up">
             
-            <section className="bg-cardBg p-4 rounded-2xl border border-slate-700 shadow-md">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                        <LayoutGrid size={14} className="text-emerald-400" /> 產業權重分佈
+            <section className="bg-cardBg p-5 rounded-3xl border border-slate-700 shadow-xl">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <LayoutGrid size={16} className="text-emerald-400" /> 產業權重分佈
                     </h3>
-                    <div className="text-[9px] font-numeric text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full font-medium">
+                    <div className="text-[10px] font-numeric text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full font-medium border border-slate-700">
                         共 {allocationData.totalSectorsRaw} 類
                     </div>
                 </div>
 
-                <div className="flex flex-col items-center">
-                    {/* SVG Donut Chart */}
-                    <div className="relative w-48 h-48 mb-6">
-                        <svg viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)' }} className="w-full h-full">
+                <div className="flex flex-col items-center relative">
+                    {/* SVG Donut Chart Optimized */}
+                    <div className="relative w-56 h-56 mb-8 filter drop-shadow-2xl">
+                        {/* Interactive SVG */}
+                        <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
+                            <defs>
+                                <filter id="glow-filter" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
+                                    <feMerge>
+                                        <feMergeNode in="coloredBlur" />
+                                        <feMergeNode in="SourceGraphic" />
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            
                             {allocationData.sectorList.map((sector) => {
                                 if (sector.value === 0) return null;
                                 const isHovered = hoveredSector === sector.name;
+                                
+                                // Calculate stroke dash for donut segments
+                                // C = 2 * PI * r = 2 * 3.14159 * 16 ~ 100.5
+                                const radius = 16;
+                                const circumference = 100.5;
+                                const gap = 1.5; // Gap size
+                                const strokeLength = Math.max(0, sector.percent * circumference - gap);
+                                const strokeOffset = -sector.startPercent * circumference;
+
                                 return (
                                     <circle
                                         key={sector.name}
-                                        cx="0" cy="0" r="0.8" 
+                                        cx="20" cy="20" r={radius}
                                         fill="transparent"
                                         stroke={sector.color}
-                                        strokeWidth={isHovered ? "0.25" : "0.2"} 
-                                        strokeDasharray={`${sector.percent * Math.PI * 1.6} ${Math.PI * 1.6}`} 
-                                        strokeDashoffset={-sector.startPercent * Math.PI * 1.6}
-                                        strokeLinecap="round" 
-                                        className="transition-all duration-300 cursor-pointer hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                                        strokeWidth={isHovered ? "4" : "3"}
+                                        strokeDasharray={`${strokeLength} ${circumference - strokeLength}`}
+                                        strokeDashoffset={strokeOffset}
+                                        strokeLinecap="round"
+                                        className="transition-all duration-300 cursor-pointer"
+                                        style={{ 
+                                            opacity: hoveredSector && !isHovered ? 0.2 : 1,
+                                            filter: isHovered ? 'url(#glow-filter)' : 'none',
+                                            transformOrigin: 'center',
+                                            transform: isHovered ? 'scale(1.02)' : 'scale(1)'
+                                        }}
                                         onMouseEnter={() => setHoveredSector(sector.name)}
                                         onMouseLeave={() => setHoveredSector(null)}
-                                        style={{ opacity: hoveredSector && !isHovered ? 0.3 : 1 }}
                                     />
                                 );
                             })}
                         </svg>
                         
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">總資產</span>
-                            <span className="text-lg font-bold text-white tracking-tight tabular-nums">${(summary.totalAssets / 10000).toFixed(0)}萬</span>
-                            
-                            {hoveredSector && (
-                                <div className="absolute top-32 flex flex-col items-center bg-slate-800/90 px-3 py-1.5 rounded-2xl border border-slate-600 backdrop-blur-md animate-fade-in z-20 shadow-xl">
-                                    <span className="text-[9px] text-slate-400 mb-0.5">{hoveredSector}</span>
-                                    <span className="text-xs font-bold text-white tabular-nums">
+                        {/* Center Text Info */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-all duration-300">
+                            {hoveredSector ? (
+                                <>
+                                    <span className="text-[10px] text-slate-400 font-medium mb-1 animate-fade-in">{hoveredSector}</span>
+                                    <span className="text-lg font-bold text-white tracking-tight tabular-nums animate-fade-in">
                                         {(allocationData.sectorList.find(s => s.name === hoveredSector)?.percent! * 100).toFixed(1)}%
                                     </span>
-                                </div>
+                                    <span className="text-[10px] text-slate-500 tabular-nums animate-fade-in">
+                                        ${(allocationData.sectorList.find(s => s.name === hoveredSector)?.value! / 1000).toFixed(0)}k
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">總資產</span>
+                                    <span className="text-xl font-bold text-white tracking-tight tabular-nums">${(summary.totalAssets / 10000).toFixed(0)}萬</span>
+                                </>
                             )}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 w-full">
-                         {allocationData.sectorList.map((sector) => (
-                             <div 
-                                key={sector.name} 
-                                className={`flex items-center justify-between p-1.5 rounded-lg transition-colors cursor-pointer border border-transparent ${hoveredSector === sector.name ? 'bg-slate-700/50 border-slate-600' : 'hover:bg-slate-800/30'}`}
-                                onMouseEnter={() => setHoveredSector(sector.name)}
-                                onMouseLeave={() => setHoveredSector(null)}
-                             >
-                                 <div className="flex items-center gap-2 min-w-0">
-                                     <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sector.color }}></div>
-                                     <span className="text-[11px] text-slate-300 font-medium truncate">{sector.name}</span>
+                    {/* Legend List */}
+                    <div className="w-full space-y-2">
+                         {allocationData.sectorList.map((sector) => {
+                             const isHovered = hoveredSector === sector.name;
+                             return (
+                                 <div 
+                                    key={sector.name} 
+                                    className={`flex items-center justify-between p-2 rounded-xl transition-all duration-200 cursor-pointer border ${isHovered ? 'bg-slate-700/50 border-slate-600 shadow-md transform scale-[1.02]' : 'bg-transparent border-transparent hover:bg-slate-800/30'}`}
+                                    onMouseEnter={() => setHoveredSector(sector.name)}
+                                    onMouseLeave={() => setHoveredSector(null)}
+                                 >
+                                     <div className="flex items-center gap-3 flex-1">
+                                         <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: sector.color, boxShadow: isHovered ? `0 0 8px ${sector.color}` : 'none' }}></div>
+                                         <div className="flex flex-col w-full pr-4">
+                                             <div className="flex justify-between items-baseline mb-1">
+                                                <span className={`text-[11px] font-bold transition-colors ${isHovered ? 'text-white' : 'text-slate-400'}`}>{sector.name}</span>
+                                                <span className={`text-[11px] font-bold tabular-nums ${isHovered ? 'text-white' : 'text-slate-500'}`}>{(sector.percent * 100).toFixed(1)}%</span>
+                                             </div>
+                                             {/* Mini Progress Bar */}
+                                             <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                                                 <div className="h-full rounded-full opacity-60" style={{ width: `${sector.percent * 100}%`, backgroundColor: sector.color }}></div>
+                                             </div>
+                                         </div>
+                                     </div>
                                  </div>
-                                 <span className="text-[11px] font-bold text-slate-400 tabular-nums">{(sector.percent * 100).toFixed(1)}%</span>
-                             </div>
-                         ))}
+                             );
+                         })}
                     </div>
                 </div>
             </section>
@@ -388,7 +433,10 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         <PieChart size={14} className="text-blue-400" /> 持股權重排行
                     </h3>
                     
-                    <div className={`px-2 py-0.5 rounded-full border flex items-center gap-1 ${allocationData.concentrationPct > 70 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                    <div 
+                        title="前三大持股集中度 (CR3)：前三名持股佔總資產的比例。數值越高代表風險越集中。"
+                        className={`px-2 py-0.5 rounded-full border flex items-center gap-1 cursor-help transition-opacity hover:opacity-80 ${allocationData.concentrationPct > 70 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                    >
                         <Layers size={10} />
                         <span className="text-[9px] font-bold tabular-nums">CR3: {allocationData.concentrationPct.toFixed(0)}%</span>
                     </div>

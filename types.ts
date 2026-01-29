@@ -78,6 +78,7 @@ export interface StockNews {
 export interface AppSettings {
   googleScriptUrl: string;
   useDemoData: boolean;
+  defaultShowBalance: boolean;
 }
 
 export enum Tab {

@@ -1,17 +1,19 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle, Loader2, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle, Loader2, Minus, Eye, EyeOff } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
   positions: PortfolioPosition[];
   onStockClick: (symbol: string) => void;
   isMarketOpen: boolean;
+  defaultShowBalance: boolean;
 }
 
-const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarketOpen }) => {
-  
+const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarketOpen, defaultShowBalance }) => {
+  const [showBalance, setShowBalance] = useState(defaultShowBalance);
+
   const getColor = (val: number) => {
     if (val > 0) return 'text-twRed';
     if (val < 0) return 'text-twGreen';
@@ -24,6 +26,12 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
     return 'bg-slate-800 border-slate-700';
   };
 
+  // Helper to mask sensitive values
+  const renderValue = (val: React.ReactNode, isSensitive = true) => {
+    if (isSensitive && !showBalance) return <span className="font-mono tracking-widest opacity-60">****</span>;
+    return val;
+  };
+
   return (
     <div className="p-3 pb-24 space-y-4 animate-fade-in">
       {/* Total Asset Card */}
@@ -31,9 +39,17 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
         <div className="relative z-10">
           <div className="flex justify-between items-start mb-0.5">
-              <h2 className="text-slate-400 text-[10px] font-medium flex items-center gap-2 uppercase tracking-wider">
-                 總資產市值
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-slate-400 text-[10px] font-medium uppercase tracking-wider">
+                    總資產市值
+                </h2>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setShowBalance(!showBalance); }}
+                    className="text-slate-500 hover:text-white transition-colors p-1 rounded-full active:bg-white/10"
+                >
+                    {showBalance ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+              </div>
               
               {/* Market Status Indicator */}
               <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border backdrop-blur-sm transition-colors ${
@@ -53,7 +69,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
           
           <div className="text-3xl text-white tracking-tight mb-4 flex items-baseline gap-1 tabular-nums">
             <span className="text-xl text-slate-400">$</span>
-            <span className="font-bold">{Math.round(summary.totalAssets).toLocaleString()}</span>
+            <span className="font-bold">
+                {renderValue(Math.round(summary.totalAssets).toLocaleString())}
+            </span>
           </div>
           
           <div className="space-y-2">
@@ -63,9 +81,13 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                 <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
                     <div className="text-[9px] text-slate-500 mb-0.5 font-light">未實現損益</div>
                     <div className={`text-base font-bold ${getColor(summary.totalPL)} flex items-baseline gap-1 tabular-nums`}>
-                        <span className="tracking-tight">{summary.totalPL > 0 ? '+' : ''}{Math.round(summary.totalPL).toLocaleString()}</span>
+                        <span className="tracking-tight">
+                            {renderValue(
+                                <>{summary.totalPL > 0 ? '+' : ''}{Math.round(summary.totalPL).toLocaleString()}</>
+                            )}
+                        </span>
                         <span className="text-[10px] opacity-80 font-medium tracking-wide">
-                            ({summary.totalPLPercent.toFixed(2)}%)
+                            ({renderValue(<>{summary.totalPLPercent.toFixed(2)}%</>)})
                         </span>
                     </div>
                 </div>
@@ -74,7 +96,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                 <div className="bg-black/20 p-2.5 rounded-xl border border-white/5">
                     <div className="text-[9px] text-slate-500 mb-0.5 font-light">累積已實現</div>
                     <div className={`text-base font-bold ${getColor(summary.totalRealizedPL)} tabular-nums tracking-tight`}>
-                        {summary.totalRealizedPL > 0 ? '+' : ''}{Math.round(summary.totalRealizedPL).toLocaleString()}
+                        {renderValue(
+                            <>{summary.totalRealizedPL > 0 ? '+' : ''}{Math.round(summary.totalRealizedPL).toLocaleString()}</>
+                        )}
                     </div>
                 </div>
             </div>
@@ -84,7 +108,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                 <div className="flex flex-col">
                      <div className="text-[9px] text-slate-500 font-light">今日帳面</div>
                      <div className={`text-sm font-bold ${getColor(summary.dayPL)} tabular-nums tracking-tight`}>
-                        {summary.dayPL > 0 ? '+' : ''}{Math.round(summary.dayPL).toLocaleString()}
+                        {renderValue(
+                            <>{summary.dayPL > 0 ? '+' : ''}{Math.round(summary.dayPL).toLocaleString()}</>
+                        )}
                      </div>
                 </div>
                 {/* Separator Line: Reduced opacity to slate-700/20 */}
@@ -92,7 +118,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                 <div className="flex flex-col text-right">
                      <div className="text-[9px] text-slate-500 font-light">今日已實現</div>
                      <div className={`text-sm font-bold ${getColor(summary.dayRealizedPL)} tabular-nums tracking-tight`}>
-                        {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
+                        {renderValue(
+                            <>{summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}</>
+                        )}
                      </div>
                 </div>
             </div>
@@ -115,9 +143,6 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
             {positions.map((pos) => {
                 const isUp = pos.dayChangePercent > 0;
                 const isDown = pos.dayChangePercent < 0;
-                const changeColorClass = isUp ? 'text-twRed' : (isDown ? 'text-twGreen' : 'text-slate-400');
-                // Added background class logic for Daily Change
-                const changeBgClass = isUp ? 'bg-twRed/10 border-twRed/20' : (isDown ? 'bg-twGreen/10 border-twGreen/20' : 'bg-slate-800 border-slate-700');
 
                 return (
                 <div 
@@ -137,57 +162,62 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         </div>
 
                         {/* Right: Price & Change (Optimized Layout) */}
-                        <div className="text-right flex flex-col items-end gap-1">
-                             {/* Current Price */}
-                             <div className="text-lg font-bold text-white tracking-tight tabular-nums leading-none">
-                                {pos.currentPrice > 0 ? (
-                                    <span>{pos.currentPrice.toLocaleString()}</span>
-                                ) : (
-                                    <Loader2 size={12} className="animate-spin inline text-slate-500" />
-                                )}
-                            </div>
+                        <div className="text-right flex flex-col items-end justify-center gap-1">
+                             {/* Current Price with Label (Inline) */}
+                             <div className="flex items-baseline gap-0.5">
+                                <span className="text-[10px] text-slate-500 font-bold">$</span>
+                                <div className="text-lg font-bold text-white tracking-tight tabular-nums leading-none">
+                                    {pos.currentPrice > 0 ? (
+                                        <span>{pos.currentPrice.toLocaleString()}</span>
+                                    ) : (
+                                        <Loader2 size={12} className="animate-spin inline text-slate-500" />
+                                    )}
+                                </div>
+                             </div>
 
-                             {/* Daily Change Badge (Re-added Background) */}
+                             {/* Daily Change - Optimized: Amount + Percentage Pill with Arrow */}
                              {pos.currentPrice > 0 && (
-                                <div className={`flex items-center justify-end gap-1.5 px-1.5 py-0.5 rounded-md border text-xs font-bold tabular-nums tracking-tight ${changeBgClass} ${changeColorClass}`}>
-                                    <div className="flex items-center gap-0.5">
+                                <div className={`flex items-center justify-end gap-1.5 text-xs font-bold tabular-nums tracking-tight ${getColor(pos.dayChangePercent)}`}>
+                                    {/* Amount (Sensitive: Masked) */}
+                                    <span className="opacity-90">
+                                        {renderValue(
+                                            <>{pos.dayChangeAmount > 0 ? '+' : ''}{Math.round(pos.dayChangeAmount).toLocaleString()}</>
+                                        )}
+                                    </span>
+                                    {/* Percentage Pill (Public Data: Unmasked) with Arrow and Bg Color matching Text Color Hue */}
+                                    <span className={`px-1.5 py-0.5 rounded-md text-[10px] border flex items-center gap-0.5 ${getBgColor(pos.dayChangePercent)} ${getColor(pos.dayChangePercent)}`}>
                                         {isUp ? <TrendingUp size={10} /> : (isDown ? <TrendingDown size={10} /> : <Minus size={10} />)}
-                                        <span>{pos.dayChangePercent.toFixed(2)}%</span>
-                                    </div>
-                                    <span className="opacity-80 font-medium text-[10px] border-l border-current/20 pl-1.5">
-                                        {pos.dayChangeAmount > 0 ? '+' : ''}{Math.round(pos.dayChangeAmount).toLocaleString()}
+                                        {/* REMOVED sign, using absolute value for percentage */}
+                                        <span>{Math.abs(pos.dayChangePercent).toFixed(2)}%</span>
                                     </span>
                                 </div>
                             )}
                         </div>
                     </div>
                     
-                    {/* Redesigned Stats Block: 10-column grid for better spacing */}
-                    <div className="bg-slate-900/40 rounded-lg p-2.5 grid grid-cols-10 gap-2 items-center relative z-10 border border-white/5">
-                         {/* Col 1: Position Size (Shares + Market Value) - Span 3 */}
-                         <div className="col-span-3 flex flex-col gap-0.5">
-                             <span className="text-[9px] text-slate-500 font-medium">持有</span>
-                             <div className="text-xs font-bold text-slate-200 tabular-nums">
-                                 {pos.shares.toLocaleString()}<span className="text-[9px] font-normal text-slate-500 ml-0.5">股</span>
+                    {/* Stats Block: 2 Columns - Holdings Left, Performance Right (Stacked) */}
+                    <div className="bg-slate-900/40 rounded-lg p-3 grid grid-cols-2 gap-4 items-center relative z-10 border border-white/5">
+                         {/* Left: Holdings (Prioritizing Shares) */}
+                         <div className="flex flex-col gap-0.5">
+                             <span className="text-[9px] text-slate-500 font-medium">持有股數</span>
+                             <div className="text-sm font-bold text-slate-200 tabular-nums tracking-tight">
+                                 {renderValue(<>{pos.shares.toLocaleString()}<span className="text-[10px] font-normal text-slate-500 ml-0.5">股</span></>)}
                              </div>
-                             <div className="text-[9px] text-slate-500 tabular-nums tracking-tight opacity-60">
-                                 ${Math.round(pos.currentValue).toLocaleString()}
-                             </div>
-                         </div>
-
-                         {/* Col 2: P/L Amount (Separated) - Span 4 */}
-                         <div className="col-span-4 flex flex-col items-end border-l border-r border-slate-700/50 px-2">
-                             <span className="text-[9px] text-slate-500 font-medium">損益</span>
-                             <div className={`text-sm font-bold tabular-nums tracking-tight ${getColor(pos.unrealizedPL)}`}>
-                                 {pos.unrealizedPL > 0 ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}
+                             <div className="text-[10px] text-slate-500 tabular-nums tracking-tight opacity-60">
+                                 ${renderValue(Math.round(pos.currentValue).toLocaleString())}
                              </div>
                          </div>
 
-                         {/* Col 3: ROI % (Clean - No Background) - Span 3 */}
-                         <div className="col-span-3 flex flex-col items-end">
-                             <span className="text-[9px] text-slate-500 font-medium">報酬率</span>
+                         {/* Right: P/L & ROI (Stacked) */}
+                         <div className="flex flex-col items-end gap-0.5 border-l border-slate-700/30 pl-4">
+                             <span className="text-[9px] text-slate-500 font-medium">總損益</span>
                              <div className={`text-sm font-bold tabular-nums tracking-tight ${getColor(pos.unrealizedPL)}`}>
-                                 {pos.unrealizedPLPercent > 0 ? '+' : ''}{pos.unrealizedPLPercent.toFixed(1)}%
+                                 {renderValue(
+                                     <>{pos.unrealizedPL > 0 ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}</>
+                                 )}
+                             </div>
+                             <div className={`text-[11px] font-bold tabular-nums tracking-tight opacity-90 ${getColor(pos.unrealizedPL)}`}>
+                                 {renderValue(<>{pos.unrealizedPLPercent > 0 ? '+' : ''}{pos.unrealizedPLPercent.toFixed(2)}%</>)}
                              </div>
                          </div>
                     </div>
