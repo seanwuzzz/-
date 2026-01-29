@@ -68,6 +68,25 @@ function App() {
     }
   });
 
+  // 禁止滾動 Effect
+  useEffect(() => {
+    if (loading) {
+      document.body.style.overflow = 'hidden';
+      // 針對 iOS Safari 可能需要的額外處理
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [loading]);
+
   // 計算台股市場狀態 (UTC+8)
   const checkMarketStatus = useCallback(() => {
     const now = new Date();
@@ -378,7 +397,7 @@ function App() {
     <div className="bg-darkBg min-h-screen text-slate-100 font-sans selection:bg-blue-500/30">
       {/* 1. 全螢幕載入遮罩 */}
       {loading && (
-        <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
+        <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-md flex flex-col items-center justify-center animate-fade-in pointer-events-auto touch-none">
             <div className="bg-slate-800 p-10 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center gap-5">
                 <Loader2 size={48} className="text-blue-400 animate-spin" />
                 <div className="flex flex-col items-center">

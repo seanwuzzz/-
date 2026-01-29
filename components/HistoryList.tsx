@@ -2,10 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ProcessedTransaction, StockNews, ClosedTrade, Transaction, StockPrice } from '../types';
 import { 
-  ArrowUpRight, 
-  ArrowDownRight, 
   History as HistoryIcon, 
-  Tag, 
   Trash2, 
   X, 
   Check, 
@@ -22,8 +19,9 @@ import {
   Pencil,
   Search,
   Filter,
-  Calendar,
-  TrendingUp
+  TrendingUp,
+  TrendingDown,
+  Coins
 } from 'lucide-react';
 
 interface Props {
@@ -35,7 +33,7 @@ interface Props {
   onClearFilter?: () => void;
   news?: StockNews[];
   newsLoading?: boolean;
-  prices?: StockPrice[]; // Added prices for current P/L calc
+  prices?: StockPrice[];
 }
 
 type SortField = 'date' | 'amount';
@@ -61,15 +59,16 @@ const HistoryList: React.FC<Props> = ({
   const [isNewsExpanded, setIsNewsExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('TRANSACTIONS');
 
-  // --- 新增篩選狀態 ---
   const [showFilters, setShowFilters] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // Standard Colors (twRed/twGreen)
   const getColor = (val: number) => (val >= 0 ? 'text-twRed' : 'text-twGreen');
-  const getBgColor = (val: number) => (val >= 0 ? 'bg-twRed/10' : 'bg-twGreen/10');
+  const getBgColor = (val: number) => (val >= 0 ? 'bg-twRed/10 border-twRed/20 text-twRed' : 'bg-twGreen/10 border-twGreen/20 text-twGreen');
+  const formatCurrency = (val: number) => Math.round(val).toLocaleString();
 
   useEffect(() => {
     const handleClickOutside = () => setConfirmingId(null);
@@ -77,7 +76,6 @@ const HistoryList: React.FC<Props> = ({
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // 當外部傳入 filterSymbol 時 (從 Dashboard 點擊)，自動填入關鍵字並展開
   useEffect(() => {
     if (filterSymbol) {
         setKeyword(filterSymbol);
@@ -128,11 +126,8 @@ const HistoryList: React.FC<Props> = ({
 
   const hasActiveFilters = keyword || filterType !== 'ALL' || startDate || endDate;
 
-  // --- 交易明細篩選邏輯 ---
   const sortedTransactions = useMemo(() => {
     let result = [...transactions];
-
-    // 1. 關鍵字篩選 (代號或名稱)
     if (keyword) {
         const lowerKw = keyword.toLowerCase();
         result = result.filter(t => 
@@ -140,21 +135,12 @@ const HistoryList: React.FC<Props> = ({
             t.name.toLowerCase().includes(lowerKw)
         );
     }
-
-    // 2. 交易類型篩選
     if (filterType !== 'ALL') {
         result = result.filter(t => t.type === filterType);
     }
+    if (startDate) result = result.filter(t => t.date >= startDate);
+    if (endDate) result = result.filter(t => t.date <= endDate);
 
-    // 3. 日期範圍篩選
-    if (startDate) {
-        result = result.filter(t => t.date >= startDate);
-    }
-    if (endDate) {
-        result = result.filter(t => t.date <= endDate);
-    }
-
-    // 4. 排序
     return result.sort((a, b) => {
         let comparison = 0;
         if (sortField === 'date') {
@@ -166,10 +152,8 @@ const HistoryList: React.FC<Props> = ({
     });
   }, [transactions, keyword, filterType, startDate, endDate, sortField, sortOrder]);
 
-  // --- 已實現損益篩選邏輯 ---
   const filteredClosedTrades = useMemo(() => {
       let result = [...closedTrades];
-
       if (keyword) {
           const lowerKw = keyword.toLowerCase();
           result = result.filter(t => 
@@ -177,13 +161,8 @@ const HistoryList: React.FC<Props> = ({
               t.name.toLowerCase().includes(lowerKw)
           );
       }
-      
-      if (startDate) {
-          result = result.filter(t => t.sellDate >= startDate);
-      }
-      if (endDate) {
-          result = result.filter(t => t.sellDate <= endDate);
-      }
+      if (startDate) result = result.filter(t => t.sellDate >= startDate);
+      if (endDate) result = result.filter(t => t.sellDate <= endDate);
 
       return result.sort((a, b) => new Date(b.sellDate).getTime() - new Date(a.sellDate).getTime());
   }, [closedTrades, keyword, startDate, endDate]);
@@ -191,293 +170,256 @@ const HistoryList: React.FC<Props> = ({
   const inputClass = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors";
 
   return (
-    <div className="p-4 pb-24 space-y-4 animate-fade-in">
-      <div className="mb-2">
-        <h2 className="text-2xl font-bold text-white text-center flex items-center justify-center gap-2 mb-4">
-            <HistoryIcon size={24} className="text-blue-400" /> 
-            歷史紀錄
-        </h2>
-        
-        {/* View Mode Toggle */}
-        <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700 max-w-[280px] mx-auto mb-4">
+    <div className="p-3 pb-24 space-y-4 animate-fade-in">
+      <div className="space-y-3">
+        {/* Toggle Switch */}
+        <div className="bg-slate-900/80 p-1 rounded-xl border border-slate-700/50 flex relative backdrop-blur-sm">
             <button
                 onClick={() => setViewMode('TRANSACTIONS')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'TRANSACTIONS' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex-1 py-2 rounded-lg text-[11px] font-bold transition-all z-10 duration-300 ${viewMode === 'TRANSACTIONS' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
             >
-                交易明細
+                交易流水帳
             </button>
             <button
                 onClick={() => setViewMode('REALIZED')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'REALIZED' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                className={`flex-1 py-2 rounded-lg text-[11px] font-bold transition-all z-10 duration-300 ${viewMode === 'REALIZED' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
             >
                 已實現損益
             </button>
+            <div 
+                className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-slate-700 border border-slate-600/50 rounded-lg shadow-lg transition-all duration-300 ease-out ${viewMode === 'TRANSACTIONS' ? 'left-1' : 'left-[calc(50%+2px)]'}`}
+            ></div>
         </div>
 
-        {/* --- 篩選控制面板 --- */}
-        <div className="bg-cardBg rounded-2xl border border-slate-700/50 shadow-sm overflow-hidden transition-all duration-300">
+        {/* Filter Panel */}
+        <div className={`bg-cardBg rounded-xl border border-slate-700/50 shadow-sm overflow-hidden transition-all duration-300 ${showFilters ? 'ring-1 ring-blue-500/20' : ''}`}>
             <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className={`w-full flex items-center justify-between p-3 transition-colors ${showFilters ? 'bg-slate-800/80 border-b border-slate-700' : 'hover:bg-slate-800/50'}`}
+                className={`w-full flex items-center justify-between p-3 transition-colors ${showFilters ? 'bg-slate-800/80 border-b border-slate-700/50' : 'hover:bg-slate-800/50'}`}
             >
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-300">
-                    <Filter size={16} className={hasActiveFilters ? "text-blue-400" : "text-slate-500"} />
-                    篩選條件
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                    <Filter size={12} className={hasActiveFilters ? "text-blue-400" : "text-slate-500"} />
+                    搜尋與篩選
                     {hasActiveFilters && !showFilters && (
-                        <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full ml-1">
-                           已過濾
+                        <span className="flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-blue-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
                         </span>
                     )}
                 </div>
-                {showFilters ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+                {showFilters ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
             </button>
 
             {showFilters && (
-                <div className="p-4 space-y-3 bg-slate-800/20 animate-slide-down">
-                    {/* 關鍵字 */}
-                    <div className="relative">
-                        <Search size={14} className="absolute left-3 top-2.5 text-slate-500" />
+                <div className="p-3 space-y-2 bg-slate-900/30 animate-slide-down">
+                    {/* Keyword */}
+                    <div className="relative group">
+                        <Search size={12} className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
                         <input 
                             type="text" 
-                            placeholder="搜尋代號或名稱..." 
+                            placeholder="搜尋代號或名稱 (例如: 2330)" 
                             value={keyword}
                             onChange={(e) => setKeyword(e.target.value.toUpperCase())}
-                            className={`${inputClass} pl-9`}
+                            className={`${inputClass} pl-8 py-1.5`}
                         />
                         {keyword && (
                             <button 
                                 onClick={() => setKeyword('')}
-                                className="absolute right-3 top-2.5 text-slate-500 hover:text-white"
+                                className="absolute right-3 top-2 text-slate-500 hover:text-white"
                             >
-                                <X size={14} />
+                                <X size={12} />
                             </button>
                         )}
                     </div>
 
-                    {/* 交易類別 (僅在交易明細模式顯示) */}
+                    {/* Type Filter */}
                     {viewMode === 'TRANSACTIONS' && (
-                        <div className="flex bg-slate-800 rounded-lg p-1">
+                        <div className="grid grid-cols-3 gap-2">
                             {(['ALL', 'BUY', 'SELL'] as const).map((type) => (
                                 <button
                                     key={type}
                                     onClick={() => setFilterType(type)}
-                                    className={`flex-1 py-1.5 rounded-md text-[10px] font-bold transition-all ${
+                                    className={`py-1.5 rounded-lg text-[10px] font-bold border transition-all active:scale-95 ${
                                         filterType === type 
-                                            ? (type === 'BUY' ? 'bg-twRed text-white' : type === 'SELL' ? 'bg-twGreen text-white' : 'bg-slate-600 text-white')
-                                            : 'text-slate-400 hover:text-slate-200'
+                                            ? (type === 'BUY' ? 'bg-twRed/20 border-twRed/50 text-twRed' : type === 'SELL' ? 'bg-twGreen/20 border-twGreen/50 text-twGreen' : 'bg-slate-600 border-slate-500 text-white')
+                                            : 'bg-slate-800/50 border-transparent text-slate-500 hover:bg-slate-800'
                                     }`}
                                 >
-                                    {type === 'ALL' ? '全部類型' : type === 'BUY' ? '買進' : '賣出'}
+                                    {type === 'ALL' ? '全部' : type === 'BUY' ? '買進' : '賣出'}
                                 </button>
                             ))}
                         </div>
                     )}
 
-                    {/* 日期範圍 */}
+                    {/* Date Range */}
                     <div className="grid grid-cols-2 gap-2">
-                        <div className="min-w-0">
-                            <label className="text-[10px] text-slate-500 mb-1 block">起始日期</label>
-                            <input 
-                                type="date" 
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className={`${inputClass} appearance-none`}
-                            />
+                        <div>
+                            <label className="text-[9px] text-slate-500 mb-0.5 block ml-1">起始日期</label>
+                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`${inputClass} py-1.5`} />
                         </div>
-                        <div className="min-w-0">
-                            <label className="text-[10px] text-slate-500 mb-1 block">結束日期</label>
-                            <input 
-                                type="date" 
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                className={`${inputClass} appearance-none`}
-                            />
+                        <div>
+                            <label className="text-[9px] text-slate-500 mb-0.5 block ml-1">結束日期</label>
+                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={`${inputClass} py-1.5`} />
                         </div>
                     </div>
 
-                    {/* 清除按鈕 */}
-                    <div className="flex justify-end pt-2 border-t border-slate-700/50">
-                        <button 
-                            onClick={handleClearAllFilters}
-                            className="text-xs text-slate-400 hover:text-white flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
-                        >
-                            <FilterX size={12} /> 清除所有篩選
+                    {/* Clear Button */}
+                    <div className="flex justify-end pt-1 border-t border-slate-700/50">
+                        <button onClick={handleClearAllFilters} className="text-[9px] text-slate-400 hover:text-white flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 transition-colors">
+                            <FilterX size={10} /> 重設條件
                         </button>
                     </div>
                 </div>
             )}
         </div>
 
-        {/* Sort Controls (Transactions Only) */}
+        {/* Sort Bar */}
         {viewMode === 'TRANSACTIONS' && (
-            <div className="flex items-center justify-between mt-4 px-1">
+            <div className="flex items-center justify-between px-2">
                 <div className="flex gap-2">
-                    <button onClick={() => handleSort('date')} className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-medium border transition-all ${sortField === 'date' ? 'bg-blue-600/20 border-blue-500/50 text-blue-300' : 'bg-transparent border-slate-700 text-slate-500'}`}>
-                        <CalendarDays size={12} /> 日期 {sortField === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
+                    <button onClick={() => handleSort('date')} className={`flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold border transition-all ${sortField === 'date' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-transparent border-transparent text-slate-500 hover:bg-slate-800/50'}`}>
+                        <CalendarDays size={10} /> 日期 {sortField === 'date' && (sortOrder === 'desc' ? '↓' : '↑')}
                     </button>
-                    <button onClick={() => handleSort('amount')} className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-medium border transition-all ${sortField === 'amount' ? 'bg-blue-600/20 border-blue-500/50 text-blue-300' : 'bg-transparent border-slate-700 text-slate-500'}`}>
-                        <CircleDollarSign size={12} /> 金額 {sortField === 'amount' && (sortOrder === 'desc' ? '↓' : '↑')}
+                    <button onClick={() => handleSort('amount')} className={`flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold border transition-all ${sortField === 'amount' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-transparent border-transparent text-slate-500 hover:bg-slate-800/50'}`}>
+                        <CircleDollarSign size={10} /> 金額 {sortField === 'amount' && (sortOrder === 'desc' ? '↓' : '↑')}
                     </button>
                 </div>
-                <div className="text-[10px] text-slate-500">
-                    共 {sortedTransactions.length} 筆
-                </div>
+                <span className="text-[9px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/50">{sortedTransactions.length} 筆</span>
             </div>
         )}
       </div>
 
-      {/* --- News Section (Linked to Keyword) --- */}
+      {/* --- News Section (Compact) --- */}
       {keyword && viewMode === 'TRANSACTIONS' && (
-        <section className="bg-slate-800/40 rounded-3xl border border-slate-700/50 mb-6 overflow-hidden transition-all duration-300">
+        <div className="bg-cardBg rounded-xl border border-slate-700/50 mb-2 overflow-hidden shadow-sm">
             <button 
                 onClick={() => setIsNewsExpanded(!isNewsExpanded)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-800/60 transition-colors"
+                className="w-full flex items-center justify-between p-3 hover:bg-white/5 transition-colors"
             >
                 <div className="flex items-center gap-2">
-                    <Newspaper size={16} className="text-amber-400" />
-                    <h3 className="text-sm font-bold text-slate-200">"{keyword}" 最新動態</h3>
-                    {!isNewsExpanded && news.length > 0 && (
-                        <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse ml-1"></span>
-                    )}
+                    <div className="p-1 bg-amber-500/10 rounded">
+                        <Newspaper size={12} className="text-amber-400" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">"{keyword}" 相關新聞</span>
                 </div>
-                {isNewsExpanded ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+                {isNewsExpanded ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
             </button>
-            
             {isNewsExpanded && (
-                <div className="px-4 pb-4 animate-slide-down">
+                <div className="px-3 pb-3 space-y-1.5 animate-slide-down">
                     {newsLoading ? (
-                        <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-500">
-                            <Loader2 size={24} className="animate-spin text-blue-400" />
-                            <span className="text-xs">正在抓取最新新聞...</span>
-                        </div>
+                        <div className="flex items-center justify-center py-4 text-slate-500 gap-2"><Loader2 size={14} className="animate-spin" /><span className="text-[10px]">搜索中...</span></div>
                     ) : news.length > 0 ? (
-                        <div className="space-y-3 pt-2">
-                            {news.slice(0, 3).map((item, idx) => (
-                                <a 
-                                    key={idx} 
-                                    href={item.url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="block bg-slate-900/50 p-3 rounded-xl border border-white/5 hover:border-blue-500/30 transition-colors group"
-                                >
-                                    <div className="flex justify-between items-start gap-2 mb-1">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-blue-400 uppercase">{item.source}</span>
-                                            {item.date && (
-                                                <span className="flex items-center gap-1 text-[8px] text-slate-500 font-mono mt-0.5">
-                                                    <Clock size={8} /> {item.date}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <ExternalLink size={10} className="text-slate-600 group-hover:text-blue-400" />
-                                    </div>
-                                    <h4 className="text-xs font-bold text-white mb-1 line-clamp-1 group-hover:text-blue-200">{item.title}</h4>
-                                    <p className="text-[10px] text-slate-500 line-clamp-1 leading-relaxed mt-1 opacity-80">{item.snippet}</p>
-                                </a>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-4 text-xs text-slate-600">暫無相關即時新聞</div>
-                    )}
+                        news.slice(0, 3).map((item, idx) => (
+                            <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className="block bg-slate-900/60 p-2.5 rounded-lg border border-white/5 hover:border-blue-500/30 hover:bg-slate-800 transition-all group">
+                                <h4 className="text-[11px] font-bold text-slate-200 mb-1 line-clamp-1 group-hover:text-blue-400 transition-colors">{item.title}</h4>
+                                <div className="flex justify-between items-center text-[9px] text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                        <span className="w-0.5 h-0.5 rounded-full bg-slate-500"></span>
+                                        {item.source} • {item.date}
+                                    </span>
+                                    <ExternalLink size={8} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                            </a>
+                        ))
+                    ) : <div className="text-center py-2 text-[10px] text-slate-600">無相關新聞</div>}
                 </div>
             )}
-        </section>
+        </div>
       )}
 
-      {/* --- View Mode: Transactions --- */}
+      {/* --- Transactions List (Highly Compact) --- */}
       {viewMode === 'TRANSACTIONS' && (
-        <div className="space-y-3 animate-slide-up">
+        <div className="space-y-2">
             {sortedTransactions.length === 0 ? (
-                <div className="text-center py-10 text-slate-500 text-sm italic bg-slate-800/20 rounded-2xl border border-slate-800">
-                    尚無符合條件的交易紀錄。
+                <div className="flex flex-col items-center justify-center py-10 text-slate-500 bg-slate-800/30 rounded-2xl border border-slate-700/50 border-dashed">
+                    <HistoryIcon size={20} className="opacity-40 mb-2" />
+                    <span className="text-[10px] font-bold text-slate-400">尚無交易紀錄</span>
                 </div>
             ) : (
                 sortedTransactions.map((tx) => {
+                    const isBuy = tx.type === 'BUY';
                     const priceData = prices?.find(p => p.symbol === tx.symbol);
                     const currentPrice = priceData ? priceData.price : 0;
                     
-                    // 計算現價試算 (只針對買進)
-                    let currentValCalc = null;
-                    if (tx.type === 'BUY' && currentPrice > 0) {
+                    let liveSnapshot = null;
+                    if (isBuy && currentPrice > 0) {
                         const marketValue = tx.shares * currentPrice;
                         const unrealized = marketValue - tx.totalAmount;
                         const roi = tx.totalAmount > 0 ? (unrealized / tx.totalAmount) * 100 : 0;
-                        currentValCalc = { unrealized, roi };
+                        liveSnapshot = { unrealized, roi };
                     }
 
                     return (
-                        <div key={tx.id} className="bg-cardBg p-4 rounded-2xl border border-slate-700/50 shadow-sm relative transition-all">
-                        <div className="absolute -top-1 -right-1 z-10 flex gap-1">
-                            {confirmingId === tx.id ? (
-                                <>
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }} className="p-2.5 bg-slate-700 text-white rounded-full shadow-xl border border-slate-600"><X size={16} /></button>
-                                    <button type="button" disabled={isDeleting} onClick={(e) => handleDeleteClick(e, tx.id)} className="flex items-center gap-1 px-3 py-2.5 bg-twRed text-white font-bold rounded-full shadow-xl border border-twRed/50 animate-pulse"><Check size={16} /><span className="text-xs">確定？</span></button>
-                                </>
-                            ) : (
-                                <>
-                                    {/* Edit Button */}
-                                    <button 
-                                        type="button" 
-                                        onClick={(e) => handleEditClick(e, tx)} 
-                                        className="p-2.5 bg-slate-800 text-slate-400 hover:text-blue-400 hover:bg-slate-700 transition-all border border-slate-600 rounded-full shadow-sm"
-                                    >
-                                        <Pencil size={16} />
-                                    </button>
-                                    {/* Delete Button */}
-                                    <button 
-                                        type="button" 
-                                        onClick={(e) => handleDeleteClick(e, tx.id)} 
-                                        className="p-2.5 bg-slate-800 text-slate-400 hover:text-twRed hover:bg-slate-700 transition-all border border-slate-600 rounded-full shadow-sm"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </>
+                        <div key={tx.id} className="relative group overflow-hidden bg-cardBg rounded-xl border border-slate-700/50 shadow-sm hover:border-blue-500/50 transition-all duration-300">
+                            {/* Actions Overlay */}
+                            {confirmingId === tx.id && (
+                                <div className="absolute inset-0 z-30 bg-slate-900/95 backdrop-blur-md flex items-center justify-between px-4 animate-fade-in">
+                                    <span className="text-xs font-bold text-white">確認刪除?</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={(e) => { e.stopPropagation(); setConfirmingId(null); }} className="p-2 rounded-full bg-slate-800 text-slate-400 border border-slate-700"><X size={14} /></button>
+                                        <button onClick={(e) => handleDeleteClick(e, tx.id)} disabled={isDeleting} className="p-2 rounded-full bg-twRed text-white shadow-lg shadow-twRed/30"><Check size={14} /></button>
+                                    </div>
+                                </div>
                             )}
-                        </div>
-                        <div className={`transition-opacity ${confirmingId === tx.id ? 'opacity-30' : 'opacity-100'}`}>
-                            <div className="flex justify-between items-start mb-2 pr-20">
-                                <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-xl ${tx.type === 'BUY' ? 'bg-twRed/20 text-twRed' : 'bg-twGreen/20 text-twGreen'}`}>{tx.type === 'BUY' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}</div>
-                                <div>
+
+                            <div className="p-3 relative z-10">
+                                {/* Header: Symbol + Name + Type | Amount */}
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <span className="text-lg font-bold text-white tabular-nums tracking-tight">{tx.symbol}</span>
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${isBuy ? 'bg-twRed/10 border-twRed/20 text-twRed' : 'bg-twGreen/10 border-twGreen/20 text-twGreen'}`}>
+                                            {isBuy ? '買進' : '賣出'}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 truncate max-w-[80px]">{tx.name}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-base font-bold text-white tabular-nums tracking-tight">
+                                            ${formatCurrency(tx.totalAmount)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Detail Row: Date | Shares x Price | P/L */}
+                                <div className="flex items-center justify-between text-[10px] text-slate-400 bg-slate-900/30 rounded-lg p-2 border border-slate-700/30">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-bold text-white">{tx.symbol}</span>
-                                        <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">{tx.name}</span>
+                                        <span className="tabular-nums opacity-80">{tx.date}</span>
+                                        <div className="w-px h-3 bg-slate-700"></div>
+                                        <span className="tabular-nums font-medium text-slate-300">
+                                            {formatCurrency(tx.shares)}股 @ {tx.price}
+                                        </span>
                                     </div>
-                                    <div className="text-[10px] text-slate-500 mt-0.5">{tx.date} • {tx.type === 'BUY' ? '買進' : '賣出'}</div>
-                                </div>
-                                </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-end mt-2">
-                                <div className="flex flex-col gap-0.5">
-                                    <div className="flex items-center gap-1 text-[10px] text-slate-500"><Tag size={12} /> 手續費: ${tx.fee}</div>
-                                    <div className="text-[10px] text-slate-500">成交單價 ${tx.price.toLocaleString()}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-bold text-white">{tx.shares.toLocaleString()} 股</div>
-                                    <div className="flex flex-col items-end gap-1 mt-1 justify-end">
-                                        <span className="text-[10px] text-slate-500">{tx.type === 'BUY' ? '總支出' : '總拿回'}: ${tx.totalAmount.toLocaleString()}</span>
-                                        
-                                        {/* 賣出交易：顯示已實現損益 */}
-                                        {tx.realizedPL !== undefined && (
-                                            <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${getBgColor(tx.realizedPL)} ${getColor(tx.realizedPL)}`}>
-                                                {tx.realizedPL >= 0 ? '+' : ''}{Math.abs(Math.round(tx.realizedPL)).toLocaleString()}
-                                            </div>
-                                        )}
-                                        
-                                        {/* 買進交易：顯示現價試算 (如果還有在監控中) */}
-                                        {currentValCalc && (
-                                            <div className="flex items-center gap-1.5 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 mt-0.5">
-                                                <span className="text-[9px] text-slate-500">現價 P/L</span>
-                                                <span className={`text-[10px] font-bold ${getColor(currentValCalc.unrealized)}`}>
-                                                    {currentValCalc.unrealized > 0 ? '+' : ''}{Math.round(currentValCalc.unrealized).toLocaleString()} ({currentValCalc.roi > 0 ? '+' : ''}{currentValCalc.roi.toFixed(1)}%)
-                                                </span>
-                                            </div>
+                                    
+                                    <div className="tabular-nums font-bold">
+                                         {tx.realizedPL !== undefined ? (
+                                            <span className={getColor(tx.realizedPL)}>
+                                                {tx.realizedPL > 0 ? '+' : ''}{formatCurrency(tx.realizedPL)}
+                                            </span>
+                                        ) : liveSnapshot ? (
+                                            <span className={getColor(liveSnapshot.unrealized)}>
+                                                {liveSnapshot.unrealized > 0 ? '+' : ''}{formatCurrency(liveSnapshot.unrealized)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-500">費: ${tx.fee}</span>
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Slim Action Footer */}
+                                <div className="mt-2 pt-2 border-t border-dashed border-slate-700/50 flex justify-end gap-3 opacity-80">
+                                     <button 
+                                        onClick={(e) => handleEditClick(e, tx)} 
+                                        className="text-[10px] font-bold text-slate-500 hover:text-blue-400 flex items-center gap-1 transition-colors hover:bg-slate-800 px-1.5 rounded"
+                                     >
+                                        <Pencil size={10} /> 編輯
+                                     </button>
+                                     <button 
+                                        onClick={(e) => handleDeleteClick(e, tx.id)} 
+                                        className="text-[10px] font-bold text-slate-500 hover:text-twRed flex items-center gap-1 transition-colors hover:bg-slate-800 px-1.5 rounded"
+                                     >
+                                        <Trash2 size={10} /> 刪除
+                                     </button>
+                                </div>
                             </div>
-                        </div>
                         </div>
                     );
                 })
@@ -485,59 +427,64 @@ const HistoryList: React.FC<Props> = ({
         </div>
       )}
 
-      {/* --- View Mode: Realized PL --- */}
+      {/* --- Realized Trades List (Compact Journey) --- */}
       {viewMode === 'REALIZED' && (
-          <div className="space-y-3 animate-slide-up">
-              {filteredClosedTrades.length === 0 ? (
-                  <div className="text-center py-10 text-slate-500 text-sm italic bg-slate-800/20 rounded-2xl border border-slate-800">
-                      尚無符合條件的紀錄。
-                  </div>
-              ) : (
-                  filteredClosedTrades.map((trade, idx) => (
-                      <div key={`${trade.id}-${idx}`} className="bg-cardBg rounded-2xl border border-slate-700/50 shadow-sm overflow-hidden">
-                          {/* Card Header */}
-                          <div className="bg-slate-800/50 px-4 py-3 border-b border-slate-700/50 flex justify-between items-center">
-                              <div className="flex items-center gap-2">
-                                  <span className="font-bold text-white">{trade.symbol}</span>
-                                  <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">{trade.name}</span>
-                              </div>
-                              <div className={`flex flex-col items-end ${getColor(trade.realizedPL)}`}>
-                                  <span className="text-sm font-bold">
-                                      {trade.realizedPL > 0 ? '+' : ''}{Math.round(trade.realizedPL).toLocaleString()}
-                                  </span>
-                                  <span className="text-[10px] font-medium opacity-80">
-                                      {trade.roi.toFixed(2)}%
-                                  </span>
-                              </div>
-                          </div>
-                          
-                          {/* Card Body */}
-                          <div className="p-4 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                              {/* Buy Info */}
-                              <div className="flex flex-col gap-1">
-                                  <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">買入</span>
-                                  <div className="text-xs text-white font-mono">{trade.buyDate}</div>
-                                  <div className="text-xs text-slate-400">均價 {trade.avgBuyPrice.toFixed(1)}</div>
-                              </div>
+        <div className="space-y-3">
+            {filteredClosedTrades.length === 0 ? (
+                 <div className="flex flex-col items-center justify-center py-10 text-slate-500 bg-slate-800/30 rounded-2xl border border-slate-700/50 border-dashed">
+                    <Coins size={20} className="opacity-40 mb-2" />
+                    <span className="text-[10px] font-bold text-slate-400">尚無已實現損益紀錄</span>
+                </div>
+            ) : (
+                filteredClosedTrades.map((trade, idx) => {
+                    const isProfit = trade.realizedPL >= 0;
+                    return (
+                        <div key={`${trade.id}-${idx}`} className="bg-cardBg rounded-xl border border-slate-700/50 shadow-sm overflow-hidden relative group hover:border-blue-500/50 transition-all duration-300">
+                            
+                            {/* Decorative Background Glow - Fainter */}
+                            <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-[50px] opacity-10 pointer-events-none ${isProfit ? 'bg-twRed' : 'bg-twGreen'}`}></div>
 
-                              {/* Arrow */}
-                              <div className="flex flex-col items-center justify-center text-slate-600 gap-1">
-                                  <div className="text-[9px] font-bold bg-slate-800 px-1.5 rounded text-slate-400">{trade.shares.toLocaleString()} 股</div>
-                                  <ArrowRight size={16} />
-                                  <div className="text-[9px] text-slate-500">{trade.holdDays} 天</div>
-                              </div>
+                            <div className="p-3 relative z-10">
+                                {/* Header: Symbol | P/L */}
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-lg text-white tabular-nums tracking-tight">{trade.symbol}</span>
+                                            <span className="text-[10px] font-medium text-slate-300 bg-slate-700/50 px-1.5 py-0.5 rounded border border-slate-600/50">{trade.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[9px] text-slate-500 mt-0.5 font-light">
+                                            <Clock size={8} className="text-blue-400" />
+                                            <span>持有 {trade.holdDays} 天</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className={`text-lg font-bold tabular-nums tracking-tight ${getColor(trade.realizedPL)}`}>
+                                            {trade.realizedPL > 0 ? '+' : ''}{formatCurrency(trade.realizedPL)}
+                                        </div>
+                                        <div className={`text-[9px] font-bold inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md mt-0.5 ${getBgColor(trade.realizedPL)}`}>
+                                            {isProfit ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+                                            {trade.roi.toFixed(2)}%
+                                        </div>
+                                    </div>
+                                </div>
 
-                              {/* Sell Info */}
-                              <div className="flex flex-col gap-1 text-right">
-                                  <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">賣出</span>
-                                  <div className="text-xs text-white font-mono">{trade.sellDate}</div>
-                                  <div className="text-xs text-slate-400">均價 {trade.sellPrice.toFixed(1)}</div>
-                              </div>
-                          </div>
-                      </div>
-                  ))
-              )}
-          </div>
+                                {/* Journey Row - Merged into one line grid */}
+                                <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-900/30 p-2 rounded-lg border border-slate-700/30">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-slate-500 font-light flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-twRed"></div>買</span>
+                                        <span className="tabular-nums text-slate-300 font-medium">{trade.buyDate} @ {trade.avgBuyPrice.toFixed(0)}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between border-l border-slate-700/50 pl-2">
+                                        <span className="text-slate-500 font-light flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-twGreen"></div>賣</span>
+                                        <span className="tabular-nums text-slate-300 font-medium">{trade.sellDate} @ {trade.sellPrice.toFixed(0)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })
+            )}
+        </div>
       )}
     </div>
   );
