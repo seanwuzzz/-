@@ -19,7 +19,8 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
   const [copied, setCopied] = useState(false);
   const [generatingImg, setGeneratingImg] = useState(false);
   
-  const shareCardRef = useRef<HTMLDivElement>(null);
+  // 専用於截圖的 Ref (指向隱藏的 DOM 元素)
+  const shareCaptureRef = useRef<HTMLDivElement>(null);
 
   const getColor = (val: number) => {
     if (val > 0) return 'text-twRed';
@@ -102,17 +103,18 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
     }
   };
 
-  // Share Image Logic
+  // Share Image Logic - 使用隱藏的專用 DOM 進行截圖
   const handleShareImage = async () => {
-      if (!shareCardRef.current) return;
+      if (!shareCaptureRef.current) return;
       setGeneratingImg(true);
 
       try {
-          // 1. Generate Canvas from DOM
-          const canvas = await html2canvas(shareCardRef.current, {
-              backgroundColor: '#0f172a', // Force dark background color to match theme
-              scale: 2, // High resolution for mobile
-              useCORS: true, // Allow loading cross-origin images if any
+          // 直接截取已經 render 在螢幕外且排版完美的元素
+          const canvas = await html2canvas(shareCaptureRef.current, {
+              backgroundColor: '#0f172a', // 強制深色背景
+              scale: 2, // 高解析度
+              useCORS: true,
+              logging: false,
           });
 
           const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -120,7 +122,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
 
           const file = new File([blob], `invest-daily-${new Date().getTime()}.png`, { type: 'image/png' });
 
-          // 2. Try Native Share (Mobile)
+          // 分享或下載
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
               await navigator.share({
                   files: [file],
@@ -128,7 +130,6 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                   text: '今日投資績效總覽'
               });
           } else {
-              // 3. Fallback: Download Link (Desktop)
               const link = document.createElement('a');
               link.download = `投資日報_${new Date().toLocaleDateString()}.png`;
               link.href = canvas.toDataURL('image/png');
@@ -369,96 +370,82 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                     </button>
                 </div>
                 
-                {/* Scrollable Content Area */}
-                <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
+                {/* Scrollable Content Area - Optimized Layout */}
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center bg-slate-900">
                     
-                    {/* --- CAPTURE AREA START --- */}
-                    <div ref={shareCardRef} className={`relative w-full rounded-2xl overflow-hidden p-6 text-center ${summary.dayPL >= 0 ? 'bg-gradient-to-b from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-b from-green-900/40 via-slate-900 to-slate-900'} border border-white/10`}>
+                    {/* --- PREVIEW AREA START (Horizontal Card) --- */}
+                    <div className={`relative w-full rounded-2xl overflow-hidden flex flex-row border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-br from-green-900/40 via-slate-900 to-slate-900'}`}>
                         
-                        {/* Header Icon */}
-                        <div className="flex justify-center mb-4">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-emerald-600'}`}>
-                                {summary.dayPL >= 0 ? <TrendingUp size={28} className="text-white" /> : <TrendingDown size={28} className="text-white" />}
+                        {/* Left Column: Hero Stats */}
+                        <div className="w-5/12 p-3 flex flex-col justify-center items-center border-r border-white/5 bg-black/10">
+                            <div className={`w-10 h-10 mb-2 rounded-xl flex items-center justify-center shadow-lg border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-emerald-600'}`}>
+                                {summary.dayPL >= 0 ? <TrendingUp size={20} className="text-white" /> : <TrendingDown size={20} className="text-white" />}
                             </div>
-                        </div>
-
-                        <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">今日戰報</h3>
-                        <div className="text-white font-mono text-sm opacity-60 mb-6">{new Date().toLocaleDateString()}</div>
-
-                        {/* Main Number */}
-                        <div className="mb-6 w-full">
-                            <div className="text-xs text-slate-500 font-bold mb-1">今日損益</div>
-                            <div className={`text-5xl font-black tabular-nums tracking-tight flex items-center justify-center gap-1 ${summary.dayPL >= 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]'}`}>
+                            <h3 className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-0.5">今日戰報</h3>
+                            <div className="text-white font-mono text-[9px] opacity-50 mb-3">{new Date().toLocaleDateString()}</div>
+                            
+                            <div className={`text-xl font-black tabular-nums tracking-tight ${summary.dayPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                 {shareMaskAmount ? '****' : (
-                                    <>
-                                        <span className="text-2xl opacity-60 font-medium self-start mt-2">$</span>
-                                        {Math.abs(Math.round(summary.dayPL)).toLocaleString()}
-                                    </>
+                                    <>{Math.abs(Math.round(summary.dayPL)).toLocaleString()}</>
                                 )}
                             </div>
-                            {/* Day ROI */}
-                            {(() => {
+                            {/* ROI Pill */}
+                             {(() => {
                                 const prevAssets = summary.totalAssets - summary.dayPL;
                                 const roi = prevAssets > 0 ? (summary.dayPL / prevAssets) * 100 : 0;
                                 return (
-                                    <div className={`text-sm font-bold mt-2 inline-block px-3 py-1 rounded-full border bg-opacity-10 ${summary.dayPL >= 0 ? 'bg-red-500 border-red-500/30 text-red-400' : 'bg-emerald-500 border-emerald-500/30 text-emerald-400'}`}>
+                                    <div className={`text-[9px] font-bold mt-1 px-2 py-0.5 rounded-full border bg-opacity-10 ${summary.dayPL >= 0 ? 'bg-red-500 border-red-500/30 text-red-400' : 'bg-emerald-500 border-emerald-500/30 text-emerald-400'}`}>
                                         {summary.dayPL >= 0 ? '+' : ''}{roi.toFixed(2)}%
                                     </div>
                                 );
                             })()}
                         </div>
 
-                        {/* Realized Stat */}
-                        <div className="w-full bg-slate-800/50 rounded-xl p-3 border border-white/5 flex justify-between items-center mb-6">
-                            <span className="text-xs text-slate-400 font-medium">今日已實現</span>
-                            <span className={`text-sm font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                {shareMaskAmount ? '****' : (
-                                    <>
-                                        {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
-                                    </>
-                                )}
-                            </span>
-                        </div>
+                        {/* Right Column: Details */}
+                        <div className="w-7/12 p-3 flex flex-col justify-between">
+                            {/* Realized */}
+                            <div className="bg-slate-800/60 rounded-lg p-2 border border-white/5 flex justify-between items-center mb-2">
+                                <span className="text-[9px] text-slate-400 font-medium">今日已實現</span>
+                                <span className={`text-[10px] font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {shareMaskAmount ? '****' : (
+                                        <>
+                                            {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
+                                        </>
+                                    )}
+                                </span>
+                            </div>
 
-                        {/* Top Performers List */}
-                        {topPerformers.length > 0 && (
-                            <div className="w-full text-left mb-6">
-                                <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
-                                    <Trophy size={10} className="text-yellow-500" /> 今日焦點
+                            {/* Top List */}
+                            <div className="flex-1 min-h-0 mb-2">
+                                <h4 className="text-[8px] text-slate-500 font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                    <Trophy size={9} className="text-yellow-500" /> 今日焦點
                                 </h4>
-                                <div className="space-y-1.5">
-                                    {topPerformers.map(p => (
-                                        <div key={p.symbol} className="flex items-center justify-between p-2 bg-slate-800/60 rounded-lg border border-white/5">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-slate-200">{p.name}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-xs font-bold tabular-nums ${getColor(p.dayChangeAmount)}`}>
-                                                    {shareMaskAmount ? '****' : (
-                                                        <>{p.dayChangeAmount > 0 ? '+' : ''}{Math.round(p.dayChangeAmount).toLocaleString()}</>
-                                                    )}
-                                                </span>
-                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getBgColor(p.dayChangePercent)}`}>
-                                                    {p.dayChangePercent > 0 ? '+' : ''}{p.dayChangePercent.toFixed(2)}%
+                                <div className="space-y-1">
+                                    {topPerformers.length > 0 ? topPerformers.slice(0, 3).map(p => (
+                                        <div key={p.symbol} className="flex items-center justify-between p-1.5 bg-slate-800/40 rounded border border-white/5">
+                                            <span className="text-[9px] font-bold text-slate-300 truncate w-14">{p.name}</span>
+                                            <div className="flex items-center gap-1">
+                                                <span className={`text-[9px] font-bold tabular-nums ${getColor(p.dayChangeAmount)}`}>
+                                                    {shareMaskAmount ? '****' : Math.round(p.dayChangeAmount).toLocaleString()}
                                                 </span>
                                             </div>
                                         </div>
-                                    ))}
+                                    )) : <div className="text-[9px] text-slate-600 text-center py-2">無顯著變動</div>}
                                 </div>
                             </div>
-                        )}
 
-                        {/* Footer */}
-                        <div className="flex items-center justify-center gap-2 mt-4 opacity-50">
-                            <div className="w-6 h-6 rounded bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
-                                <span className="text-[10px] font-bold text-white">M</span>
-                            </div>
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                投資管家 App
+                             {/* Footer */}
+                            <div className="flex items-center justify-end gap-1 opacity-50">
+                                <div className="w-3 h-3 rounded bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                                    <span className="text-[6px] font-bold text-white">M</span>
+                                </div>
+                                <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                                    投資管家
+                                </div>
                             </div>
                         </div>
                     </div>
-                    {/* --- CAPTURE AREA END --- */}
+                    {/* --- PREVIEW AREA END --- */}
 
                 </div>
 
@@ -504,6 +491,104 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
             </div>
         </div>
       )}
+      
+      {/* 
+        HIDDEN CAPTURE AREA (Landscape / Horizontal)
+        固定寬度 600px，高度自動，採用左右分割佈局。
+      */}
+      <div 
+        ref={shareCaptureRef}
+        style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: '-9999px',
+            width: '600px', // Horizontal Card Width
+            zIndex: -50,
+            visibility: 'visible',
+            fontFamily: 'system-ui, sans-serif'
+        }}
+        className="bg-slate-900 text-white"
+      >
+        <div className={`w-full p-6 flex flex-row ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-900/40 via-slate-900 to-slate-900' : 'bg-gradient-to-br from-green-900/40 via-slate-900 to-slate-900'}`}>
+            
+            {/* Left Column: Hero Stats */}
+            <div className="w-5/12 pr-6 border-r border-white/10 flex flex-col justify-center items-center">
+                <div className={`w-16 h-16 mb-4 rounded-2xl flex items-center justify-center shadow-2xl border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-emerald-600'}`}>
+                    {summary.dayPL >= 0 ? <TrendingUp size={36} className="text-white" /> : <TrendingDown size={36} className="text-white" />}
+                </div>
+
+                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] mb-1">今日戰報</h3>
+                <div className="text-white font-mono text-sm opacity-60 mb-4">{new Date().toLocaleDateString()}</div>
+                
+                <div className={`text-3xl font-black tabular-nums tracking-tight mb-2 ${summary.dayPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {shareMaskAmount ? '****' : (
+                        <>{summary.dayPL > 0 ? '+' : ''}{Math.round(summary.dayPL).toLocaleString()}</>
+                    )}
+                </div>
+                {/* ROI Pill */}
+                {(() => {
+                    const prevAssets = summary.totalAssets - summary.dayPL;
+                    const roi = prevAssets > 0 ? (summary.dayPL / prevAssets) * 100 : 0;
+                    return (
+                        <div className={`text-sm font-bold px-3 py-1 rounded-full border bg-opacity-10 ${summary.dayPL >= 0 ? 'bg-red-500 border-red-500/30 text-red-400' : 'bg-emerald-500 border-emerald-500/30 text-emerald-400'}`}>
+                            {summary.dayPL >= 0 ? '+' : ''}{roi.toFixed(2)}%
+                        </div>
+                    );
+                })()}
+            </div>
+
+            {/* Right Column: Details */}
+            <div className="w-7/12 pl-6 flex flex-col justify-center">
+                {/* Realized */}
+                <div className="bg-slate-800/80 rounded-xl p-3 border border-white/10 flex justify-between items-center mb-6 shadow-sm">
+                    <span className="text-xs text-slate-400 font-medium">今日已實現</span>
+                    <span className={`text-base font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {shareMaskAmount ? '****' : (
+                            <>
+                                {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
+                            </>
+                        )}
+                    </span>
+                </div>
+
+                {/* Top List */}
+                <div className="flex-1">
+                    <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <Trophy size={12} className="text-yellow-500" /> 今日焦點
+                    </h4>
+                    <div className="space-y-2">
+                        {topPerformers.length > 0 ? topPerformers.slice(0, 3).map(p => (
+                            <div key={p.symbol} className="flex items-center justify-between p-2 bg-slate-800/60 rounded-lg border border-white/5">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-slate-200">{p.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-sm font-bold tabular-nums ${getColor(p.dayChangeAmount)}`}>
+                                        {shareMaskAmount ? '****' : (
+                                            <>{p.dayChangeAmount > 0 ? '+' : ''}{Math.round(p.dayChangeAmount).toLocaleString()}</>
+                                        )}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getBgColor(p.dayChangePercent)}`}>
+                                        {p.dayChangePercent > 0 ? '+' : ''}{p.dayChangePercent.toFixed(2)}%
+                                    </span>
+                                </div>
+                            </div>
+                        )) : <div className="text-xs text-slate-600 text-center py-2">無顯著變動</div>}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-2 mt-6 opacity-60">
+                    <div className="w-5 h-5 rounded bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-white">M</span>
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        投資管家 App
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
     </div>
   );
 };
