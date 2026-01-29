@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle, Loader2, Minus, Eye, EyeOff } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, Hash, ChevronRight, AlertTriangle, Loader2, Minus, Eye, EyeOff, Share2, X, Copy, Check, Smartphone, Trophy } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
@@ -13,6 +13,9 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarketOpen, defaultShowBalance }) => {
   const [showBalance, setShowBalance] = useState(defaultShowBalance);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareMaskAmount, setShareMaskAmount] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const getColor = (val: number) => {
     if (val > 0) return 'text-twRed';
@@ -32,8 +35,71 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
     return val;
   };
 
+  // Calculate Top 3 Performers (by Amount)
+  const topPerformers = useMemo(() => {
+    // Sort by dayChangeAmount descending
+    return [...positions]
+      .sort((a, b) => b.dayChangeAmount - a.dayChangeAmount)
+      .slice(0, 3)
+      .filter(p => p.dayChangeAmount !== 0); // Optional: Exclude flat stocks
+  }, [positions]);
+
+  // Share Logic
+  const generateShareText = () => {
+    const date = new Date().toLocaleDateString();
+    const sign = summary.dayPL > 0 ? '+' : '';
+    const emoji = summary.dayPL > 0 ? '🔥' : (summary.dayPL < 0 ? '🥗' : '😐');
+    
+    const yesterdayAssets = summary.totalAssets - summary.dayPL;
+    const dayRoi = yesterdayAssets > 0 ? (summary.dayPL / yesterdayAssets) * 100 : 0;
+    const dayRoiStr = `${dayRoi > 0 ? '+' : ''}${dayRoi.toFixed(2)}%`;
+
+    let text = `📅 投資日報 ${date}\n` +
+               `${emoji} 今日損益: ${sign}${shareMaskAmount ? '****' : Math.round(summary.dayPL).toLocaleString()} (${dayRoiStr})\n` +
+               `💰 已實現: ${summary.dayRealizedPL > 0 ? '+' : ''}${shareMaskAmount ? '****' : Math.round(summary.dayRealizedPL).toLocaleString()}\n`;
+
+    if (topPerformers.length > 0) {
+        text += `\n🏆 今日焦點:\n`;
+        topPerformers.forEach(p => {
+            const pSign = p.dayChangeAmount > 0 ? '+' : '';
+            const pVal = shareMaskAmount ? '****' : `${pSign}${Math.round(p.dayChangeAmount).toLocaleString()}`;
+            text += `${p.name}: ${pVal} (${p.dayChangePercent > 0 ? '+' : ''}${p.dayChangePercent.toFixed(2)}%)\n`;
+        });
+    }
+
+    text += `\n🚀 投資管家`;
+    return text;
+  };
+
+  const handleCopyText = async () => {
+    const text = generateShareText();
+    try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+        console.error('Copy failed', err);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    const text = generateShareText();
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: '我的投資日報',
+                text: text,
+            });
+        } catch (err) {
+            console.log('Share canceled');
+        }
+    } else {
+        handleCopyText();
+    }
+  };
+
   return (
-    <div className="p-3 pb-24 space-y-4 animate-fade-in">
+    <div className="p-3 pb-24 space-y-4 animate-fade-in relative">
       {/* Total Asset Card */}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-3xl shadow-xl border border-slate-700/50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
@@ -104,8 +170,8 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
             </div>
             
             {/* Row 2: Today's Performance (Combined) */}
-            <div className="bg-black/20 p-2.5 rounded-xl border border-white/5 flex items-center justify-between">
-                <div className="flex flex-col">
+            <div className="bg-black/20 p-2 rounded-xl border border-white/5 flex items-center justify-between relative">
+                <div className="flex flex-col pl-1 flex-1">
                      <div className="text-[9px] text-slate-500 font-light">今日帳面</div>
                      <div className={`text-sm font-bold ${getColor(summary.dayPL)} tabular-nums tracking-tight`}>
                         {renderValue(
@@ -113,9 +179,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         )}
                      </div>
                 </div>
-                {/* Separator Line: Reduced opacity to slate-700/20 */}
+                {/* Separator Line */}
                 <div className="h-6 w-px bg-slate-700/20 mx-2"></div>
-                <div className="flex flex-col text-right">
+                <div className="flex flex-col text-right pr-1 flex-1">
                      <div className="text-[9px] text-slate-500 font-light">今日已實現</div>
                      <div className={`text-sm font-bold ${getColor(summary.dayRealizedPL)} tabular-nums tracking-tight`}>
                         {renderValue(
@@ -126,6 +192,19 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Share Button Area - Dedicated Section */}
+      <div className="flex items-center justify-center">
+        <button
+            onClick={() => setShowShareModal(true)}
+            className="w-full bg-slate-800/80 hover:bg-slate-700/80 active:scale-[0.98] transition-all border border-slate-700/50 p-3 rounded-xl flex items-center justify-center gap-2 group shadow-sm"
+        >
+            <div className="p-1.5 bg-blue-500/10 rounded-full group-hover:bg-blue-500/20 transition-colors">
+                <Share2 size={16} className="text-blue-400" />
+            </div>
+            <span className="text-sm font-bold text-slate-300 group-hover:text-white">分享今日戰報</span>
+        </button>
       </div>
 
       {/* Holdings List */}
@@ -233,6 +312,131 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
           <AlertTriangle size={10} className="shrink-0" />
           <span>報價延遲，以券商為準。</span>
       </div>
+
+      {/* SHARE MODAL */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowShareModal(false)}>
+            <div className="bg-slate-900 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-700" onClick={e => e.stopPropagation()}>
+                {/* Close Button */}
+                <div className="absolute top-4 right-4 z-20">
+                    <button onClick={() => setShowShareModal(false)} className="bg-black/20 hover:bg-black/40 text-white p-2 rounded-full backdrop-blur-md transition-colors">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                {/* Share Card Visual */}
+                <div className={`relative p-6 pb-6 flex flex-col items-center text-center ${summary.dayPL >= 0 ? 'bg-gradient-to-b from-red-600/20 via-slate-900 to-slate-900' : 'bg-gradient-to-b from-green-600/20 via-slate-900 to-slate-900'}`}>
+                    
+                    {/* Header Icon */}
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 shadow-lg border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-green-500 to-emerald-600'}`}>
+                        {summary.dayPL >= 0 ? <TrendingUp size={24} className="text-white" /> : <TrendingDown size={24} className="text-white" />}
+                    </div>
+
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">今日戰報</h3>
+                    <div className="text-white font-mono text-sm opacity-60 mb-6">{new Date().toLocaleDateString()}</div>
+
+                    {/* Main Number */}
+                    <div className="mb-6 w-full">
+                        <div className="text-xs text-slate-500 font-bold mb-1">今日損益</div>
+                        <div className={`text-4xl font-black tabular-nums tracking-tight flex items-center justify-center gap-1 ${summary.dayPL >= 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]'}`}>
+                            {shareMaskAmount ? '****' : (
+                                <>
+                                    <span className="text-2xl opacity-60 font-medium self-start mt-1">$</span>
+                                    {Math.abs(Math.round(summary.dayPL)).toLocaleString()}
+                                </>
+                            )}
+                        </div>
+                        {/* Day ROI calculated from (DayPL / (TotalAssets - DayPL)) */}
+                        {(() => {
+                             const prevAssets = summary.totalAssets - summary.dayPL;
+                             const roi = prevAssets > 0 ? (summary.dayPL / prevAssets) * 100 : 0;
+                             return (
+                                <div className={`text-sm font-bold mt-2 inline-block px-3 py-1 rounded-full border bg-opacity-10 ${summary.dayPL >= 0 ? 'bg-red-500 border-red-500/30 text-red-400' : 'bg-emerald-500 border-emerald-500/30 text-emerald-400'}`}>
+                                    {summary.dayPL >= 0 ? '+' : ''}{roi.toFixed(2)}%
+                                </div>
+                             );
+                        })()}
+                    </div>
+
+                    {/* Realized Stat */}
+                    <div className="w-full bg-slate-800/50 rounded-xl p-3 border border-white/5 flex justify-between items-center mb-6">
+                        <span className="text-xs text-slate-400 font-medium">今日已實現</span>
+                        <span className={`text-sm font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                             {shareMaskAmount ? '****' : (
+                                <>
+                                    {summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}
+                                </>
+                             )}
+                        </span>
+                    </div>
+
+                    {/* Top Performers List */}
+                    {topPerformers.length > 0 && (
+                        <div className="w-full text-left mb-6">
+                            <h4 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <Trophy size={10} className="text-yellow-500" /> 今日焦點
+                            </h4>
+                            <div className="space-y-1.5">
+                                {topPerformers.map(p => (
+                                    <div key={p.symbol} className="flex items-center justify-between p-2 bg-slate-800/60 rounded-lg border border-white/5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-200">{p.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-xs font-bold tabular-nums ${getColor(p.dayChangeAmount)}`}>
+                                                {shareMaskAmount ? '****' : (
+                                                    <>{p.dayChangeAmount > 0 ? '+' : ''}{Math.round(p.dayChangeAmount).toLocaleString()}</>
+                                                )}
+                                            </span>
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getBgColor(p.dayChangePercent)}`}>
+                                                {p.dayChangePercent > 0 ? '+' : ''}{p.dayChangePercent.toFixed(2)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Footer */}
+                    <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                        投資管家 App
+                    </div>
+                </div>
+
+                {/* Actions Area */}
+                <div className="bg-slate-800 p-4 border-t border-slate-700 space-y-3">
+                    {/* Privacy Toggle */}
+                    <div className="flex items-center justify-between px-2 mb-2">
+                        <span className="text-xs text-slate-400">隱藏金額 (僅顯示百分比)</span>
+                        <button 
+                            onClick={() => setShareMaskAmount(!shareMaskAmount)}
+                            className={`w-10 h-5 rounded-full relative transition-colors ${shareMaskAmount ? 'bg-blue-500' : 'bg-slate-600'}`}
+                        >
+                            <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${shareMaskAmount ? 'translate-x-5' : ''}`}></div>
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={handleCopyText}
+                            className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-white transition-all active:scale-95"
+                        >
+                            {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+                            {copied ? '已複製' : '複製文字'}
+                        </button>
+                        <button 
+                            onClick={handleNativeShare}
+                            className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-500 text-white transition-all active:scale-95 shadow-lg shadow-blue-500/20"
+                        >
+                            {navigator.share ? <Smartphone size={16} /> : <Share2 size={16} />}
+                            分享戰報
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
