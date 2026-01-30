@@ -8,6 +8,7 @@ export interface Transaction {
   shares: number;
   price: number;
   fee: number;
+  notes?: string; // 新增: 交易心得/備註
 }
 
 export interface ProcessedTransaction extends Transaction {
@@ -21,7 +22,7 @@ export interface StockPrice {
   changePercent: number;
   name?: string;
   sector?: string;
-  beta?: number; // 新增: 個股 Beta 值
+  beta?: number;
 }
 
 export interface PortfolioPosition {
@@ -38,7 +39,7 @@ export interface PortfolioPosition {
   dayChangeAmount: number;
   realizedPL: number;
   sector: string;
-  beta: number; // 新增: 個股 Beta 值
+  beta: number;
 }
 
 export interface PortfolioSummary {
@@ -47,9 +48,9 @@ export interface PortfolioSummary {
   totalPL: number;
   totalPLPercent: number;
   totalRealizedPL: number;
-  dayPL: number; // 純帳面今日變動
-  dayRealizedPL: number; // 新增: 今日已實現損益
-  portfolioBeta: number; // 新增: 投資組合加權 Beta
+  dayPL: number;
+  dayRealizedPL: number;
+  portfolioBeta: number;
 }
 
 export interface ClosedTrade {
@@ -57,13 +58,14 @@ export interface ClosedTrade {
   symbol: string;
   name: string;
   sellDate: string;
-  buyDate: string; // 如果有多筆買入，顯示最早的或範圍
+  buyDate: string;
   shares: number;
-  avgBuyPrice: number; // 加權平均買入價
+  avgBuyPrice: number;
   sellPrice: number;
-  realizedPL: number; // 已實現損益 (扣除所有手續費)
-  roi: number; // 報酬率
-  holdDays: number; // 持有天數
+  realizedPL: number;
+  roi: number;
+  holdDays: number;
+  notes?: string; // 新增: 交易心得
 }
 
 export interface StockNews {

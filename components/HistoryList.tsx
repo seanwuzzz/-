@@ -21,7 +21,9 @@ import {
   Filter,
   TrendingUp,
   TrendingDown,
-  Coins
+  Coins,
+  StickyNote,
+  Save
 } from 'lucide-react';
 
 interface Props {
@@ -34,6 +36,7 @@ interface Props {
   news?: StockNews[];
   newsLoading?: boolean;
   prices?: StockPrice[];
+  onUpdateNote: (id: string, note: string) => Promise<void>; // New Prop for updating notes
 }
 
 type SortField = 'date' | 'amount';
@@ -50,7 +53,8 @@ const HistoryList: React.FC<Props> = ({
   onClearFilter,
   news = [],
   newsLoading = false,
-  prices = []
+  prices = [],
+  onUpdateNote
 }) => {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -64,6 +68,11 @@ const HistoryList: React.FC<Props> = ({
   const [filterType, setFilterType] = useState<FilterType>('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Note Modal State
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteContent, setNoteContent] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   // Standard Colors (twRed/twGreen)
   const getColor = (val: number) => (val >= 0 ? 'text-twRed' : 'text-twGreen');
@@ -124,6 +133,24 @@ const HistoryList: React.FC<Props> = ({
       if (onClearFilter) onClearFilter();
   };
 
+  const handleOpenNoteModal = (id: string, currentNote: string = '') => {
+      setEditingNoteId(id);
+      setNoteContent(currentNote);
+  };
+
+  const handleSaveNote = async () => {
+      if (!editingNoteId) return;
+      setIsSavingNote(true);
+      try {
+          await onUpdateNote(editingNoteId, noteContent);
+          setEditingNoteId(null);
+      } catch (e) {
+          alert('儲存心得失敗');
+      } finally {
+          setIsSavingNote(false);
+      }
+  };
+
   const hasActiveFilters = keyword || filterType !== 'ALL' || startDate || endDate;
 
   const sortedTransactions = useMemo(() => {
@@ -168,9 +195,11 @@ const HistoryList: React.FC<Props> = ({
   }, [closedTrades, keyword, startDate, endDate]);
 
   const inputClass = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors";
+  // Locking height and appearance for iOS consistency
+  const dateInputClass = `${inputClass} h-[34px] appearance-none`;
 
   return (
-    <div className="p-3 pb-24 space-y-4 animate-fade-in">
+    <div className="p-3 pb-24 space-y-4 animate-fade-in relative">
       <div className="space-y-3">
         {/* Toggle Switch */}
         <div className="bg-slate-900/80 p-1 rounded-xl border border-slate-700/50 flex relative backdrop-blur-sm">
@@ -193,25 +222,30 @@ const HistoryList: React.FC<Props> = ({
 
         {/* Filter Panel */}
         <div className={`bg-cardBg rounded-xl border border-slate-700/50 shadow-sm overflow-hidden transition-all duration-300 ${showFilters ? 'ring-1 ring-blue-500/20' : ''}`}>
-            <button 
-                onClick={() => setShowFilters(!showFilters)}
-                className={`w-full flex items-center justify-between p-3 transition-colors ${showFilters ? 'bg-slate-800/80 border-b border-slate-700/50' : 'hover:bg-slate-800/50'}`}
-            >
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+            <div className="flex items-center justify-between p-3 bg-slate-800/20">
+                 <button 
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                >
                     <Filter size={12} className={hasActiveFilters ? "text-blue-400" : "text-slate-500"} />
                     搜尋與篩選
-                    {hasActiveFilters && !showFilters && (
-                        <span className="flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
-                        </span>
-                    )}
-                </div>
-                {showFilters ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
-            </button>
+                    {showFilters ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
+                </button>
+                
+                {/* Visible "Clear Filter" Button when filters are active */}
+                {hasActiveFilters && (
+                    <button 
+                        onClick={handleClearAllFilters}
+                        className="flex items-center gap-1 text-[10px] font-bold text-slate-300 bg-blue-500/20 px-2 py-1 rounded-full border border-blue-500/30 hover:bg-blue-500/30 transition-all active:scale-95"
+                    >
+                        <FilterX size={10} />
+                        清除條件
+                    </button>
+                )}
+            </div>
 
             {showFilters && (
-                <div className="p-3 space-y-2 bg-slate-900/30 animate-slide-down">
+                <div className="p-3 space-y-2 bg-slate-900/30 animate-slide-down border-t border-slate-700/30">
                     {/* Keyword */}
                     <div className="relative group">
                         <Search size={12} className="absolute left-3 top-2.5 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
@@ -251,23 +285,16 @@ const HistoryList: React.FC<Props> = ({
                         </div>
                     )}
 
-                    {/* Date Range */}
+                    {/* Date Range - Fixed Height */}
                     <div className="grid grid-cols-2 gap-2">
                         <div>
                             <label className="text-[9px] text-slate-500 mb-0.5 block ml-1">起始日期</label>
-                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`${inputClass} py-1.5`} />
+                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={dateInputClass} />
                         </div>
                         <div>
                             <label className="text-[9px] text-slate-500 mb-0.5 block ml-1">結束日期</label>
-                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={`${inputClass} py-1.5`} />
+                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={dateInputClass} />
                         </div>
-                    </div>
-
-                    {/* Clear Button */}
-                    <div className="flex justify-end pt-1 border-t border-slate-700/50">
-                        <button onClick={handleClearAllFilters} className="text-[9px] text-slate-400 hover:text-white flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 transition-colors">
-                            <FilterX size={10} /> 重設條件
-                        </button>
                     </div>
                 </div>
             )}
@@ -404,6 +431,14 @@ const HistoryList: React.FC<Props> = ({
                                     </div>
                                 </div>
 
+                                {/* Notes if present */}
+                                {tx.notes && (
+                                    <div className="mt-2 text-[10px] text-slate-400 bg-yellow-500/5 px-2 py-1.5 rounded border border-yellow-500/10 flex gap-2">
+                                        <StickyNote size={12} className="text-yellow-500/50 shrink-0 mt-0.5" />
+                                        <span>{tx.notes}</span>
+                                    </div>
+                                )}
+
                                 {/* Slim Action Footer */}
                                 <div className="mt-2 pt-2 border-t border-dashed border-slate-700/50 flex justify-end gap-3 opacity-80">
                                      <button 
@@ -468,7 +503,7 @@ const HistoryList: React.FC<Props> = ({
                                     </div>
                                 </div>
 
-                                {/* Journey Row - Merged into one line grid */}
+                                {/* Journey Row */}
                                 <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-900/30 p-2 rounded-lg border border-slate-700/30">
                                     <div className="flex items-center justify-between">
                                         <span className="text-slate-500 font-light flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-twRed"></div>買</span>
@@ -479,12 +514,66 @@ const HistoryList: React.FC<Props> = ({
                                         <span className="tabular-nums text-slate-300 font-medium">{trade.sellDate} @ {trade.sellPrice.toFixed(0)}</span>
                                     </div>
                                 </div>
+
+                                {/* Notes Section */}
+                                <div className="mt-2 flex items-start gap-2">
+                                     <button 
+                                        onClick={() => handleOpenNoteModal(trade.id, trade.notes)}
+                                        className="shrink-0 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-blue-400 transition-colors border border-slate-700"
+                                        title="編輯心得"
+                                     >
+                                        <Pencil size={10} />
+                                     </button>
+                                     <div className={`flex-1 text-[10px] p-2 rounded-lg ${trade.notes ? 'bg-slate-800/50 text-slate-300' : 'text-slate-600 italic border border-dashed border-slate-700/50'}`}>
+                                         {trade.notes || "尚未撰寫交易心得..."}
+                                     </div>
+                                </div>
                             </div>
                         </div>
                     );
                 })
             )}
         </div>
+      )}
+
+      {/* Note Editor Modal */}
+      {editingNoteId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setEditingNoteId(null)}>
+              <div className="bg-slate-800 w-full max-w-sm rounded-2xl border border-slate-700 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                  <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                          <StickyNote size={16} className="text-blue-400" />
+                          交易心得
+                      </h3>
+                      <button onClick={() => setEditingNoteId(null)} className="text-slate-500 hover:text-white"><X size={18} /></button>
+                  </div>
+                  <div className="p-4">
+                      <textarea
+                          value={noteContent}
+                          onChange={(e) => setNoteContent(e.target.value)}
+                          placeholder="記錄這次交易的決策理由、檢討或心得..."
+                          className="w-full h-32 bg-slate-900 border border-slate-600 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                          autoFocus
+                      />
+                  </div>
+                  <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex gap-3">
+                      <button 
+                        onClick={() => setEditingNoteId(null)}
+                        className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm font-bold hover:bg-slate-700"
+                      >
+                          取消
+                      </button>
+                      <button 
+                        onClick={handleSaveNote}
+                        disabled={isSavingNote}
+                        className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                      >
+                          {isSavingNote ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          儲存心得
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
     </div>
   );

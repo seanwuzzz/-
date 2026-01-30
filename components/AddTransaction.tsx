@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Transaction } from '../types';
-import { PlusCircle, Loader2, Calculator, AlertCircle, Save, X } from 'lucide-react';
+import { PlusCircle, Loader2, Calculator, AlertCircle, Save, X, StickyNote } from 'lucide-react';
 
 interface Props {
   onAdd: (tx: Omit<Transaction, 'id'>) => Promise<void>;
   onCancel: () => void;
-  initialData?: Transaction | null; // 支援編輯模式
+  initialData?: Transaction | null;
 }
 
 const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
@@ -19,10 +19,10 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
     type: 'BUY' as 'BUY' | 'SELL',
     shares: '',
     price: '',
-    fee: '20'
+    fee: '20',
+    notes: ''
   });
 
-  // 如果有 initialData，初始化表單
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -32,13 +32,13 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
         type: initialData.type,
         shares: initialData.shares.toString(),
         price: initialData.price.toString(),
-        fee: initialData.fee.toString()
+        fee: initialData.fee.toString(),
+        notes: initialData.notes || ''
       });
     }
   }, [initialData]);
 
   const handleSymbolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // 僅允許數字與英文字母，並自動轉大寫
     const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     setFormData({ ...formData, symbol: val });
   };
@@ -60,11 +60,8 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
     }
 
     const amount = price * shares;
-    // 買進: 0.1425%
-    // 賣出: 0.1425% + 0.3% (證交稅) = 0.4425%
     const rate = formData.type === 'BUY' ? 0.001425 : 0.004425;
     
-    // 四捨五入取整數
     const calculated = Math.round(amount * rate);
     const finalFee = calculated < 1 ? 1 : calculated;
 
@@ -84,7 +81,8 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
             type: formData.type,
             shares: Number(formData.shares),
             price: Number(formData.price),
-            fee: Number(formData.fee)
+            fee: Number(formData.fee),
+            notes: formData.notes
         });
     } catch (err) {
         alert("操作失敗，請檢查網路連線。");
@@ -96,7 +94,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
   const inputClassName = "w-full h-[42px] bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm appearance-none";
 
   return (
-    <div className="p-4 h-full flex flex-col justify-center max-w-lg mx-auto animate-fade-in">
+    <div className="p-4 h-full flex flex-col justify-center max-w-lg mx-auto animate-fade-in pb-20">
       <div className="bg-cardBg rounded-3xl p-6 shadow-2xl border border-slate-700 relative">
         <button 
             onClick={onCancel}
@@ -228,7 +226,20 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
              )}
           </div>
 
-          <div className="pt-4 flex gap-3">
+          {/* Notes Field */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1 flex items-center gap-1">
+                <StickyNote size={12} /> 備註 / 心得 (選填)
+            </label>
+            <textarea
+                value={formData.notes}
+                onChange={e => setFormData({...formData, notes: e.target.value})}
+                placeholder="記錄交易理由、心得或策略..."
+                className={`${inputClassName} h-20 py-2 resize-none`}
+            />
+          </div>
+
+          <div className="pt-2 flex gap-3">
             <button
                 type="button"
                 onClick={onCancel}

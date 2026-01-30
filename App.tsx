@@ -171,7 +171,8 @@ function App() {
                 type: t.type,
                 shares: Number(t.shares),
                 price: Number(t.pricePerShare),
-                fee: Number(t.fees)
+                fee: Number(t.fees),
+                notes: t.notes || ''
             }));
             setTransactions(mappedTxs);
             // 快取交易紀錄
@@ -336,6 +337,7 @@ function App() {
         shares: txData.shares,
         pricePerShare: txData.price,
         fees: txData.fee,
+        notes: txData.notes, // Include Notes
         id: editingTransaction ? editingTransaction.id : new Date().getTime().toString(),
         action: editingTransaction ? 'UPDATE' : 'CREATE'
     };
@@ -356,6 +358,50 @@ function App() {
         alert("連線失敗，請稍後再試。");
     } finally {
         setEditingTransaction(null);
+    }
+  };
+
+  const handleUpdateNote = async (id: string, note: string) => {
+      // Find the existing transaction first
+      const tx = transactions.find(t => t.id === id);
+      if (!tx) return;
+
+      if (settings.useDemoData) {
+          setTransactions(prev => prev.map(t => t.id === id ? { ...t, notes: note } : t));
+          return;
+      }
+
+      // Reuse the update logic but specific for notes
+      const payload = {
+          id: tx.id,
+          date: tx.date,
+          type: tx.type,
+          stockSymbol: tx.symbol,
+          stockName: tx.name,
+          shares: tx.shares,
+          pricePerShare: tx.price,
+          fees: tx.fee,
+          notes: note,
+          action: 'UPDATE'
+      };
+
+      try {
+        if (!settings.googleScriptUrl) return;
+        await fetch(settings.googleScriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        // Optimistic UI update
+        setTransactions(prev => prev.map(t => t.id === id ? { ...t, notes: note } : t));
+        
+        // Background refresh to ensure sync
+        fetchData();
+    } catch (error) {
+        console.error("Update Note error:", error);
+        alert("更新心得失敗");
     }
   };
 
@@ -472,6 +518,7 @@ function App() {
                 news={stockNews} 
                 newsLoading={newsLoading}
                 prices={prices}
+                onUpdateNote={handleUpdateNote}
             />
         )}
         

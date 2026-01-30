@@ -35,7 +35,6 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
   const [activeSubTab, setActiveSubTab] = useState<AnalysisTab>(AnalysisTab.ALLOCATION);
   const [hoverDate, setHoverDate] = useState<{ date: string; count: number } | null>(null);
   const [selectedChartPos, setSelectedChartPos] = useState<PortfolioPosition | null>(null);
-  const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [showAllHoldings, setShowAllHoldings] = useState(false);
 
   if (positions.length === 0 && transactions.length === 0) {
@@ -63,6 +62,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
 
     const MAX_SLICES = 5;
     let displayList = [];
+    let otherSectorsDetails: {name: string, value: number, percent: number}[] = [];
     
     if (allSectors.length > MAX_SLICES) {
         const topSectors = allSectors.slice(0, MAX_SLICES);
@@ -78,6 +78,13 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
             value: othersValue,
             color: OTHERS_COLOR
         });
+
+        // Calculate details for "Others"
+        otherSectorsDetails = otherSectors.map(s => ({
+            ...s,
+            percent: summary.totalAssets > 0 ? (s.value / summary.totalAssets) * 100 : 0
+        }));
+
     } else {
         displayList = allSectors.map((s, i) => ({
             ...s,
@@ -104,7 +111,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     const top3Concentration = sortedByWeight.slice(0, 3).reduce((acc, curr) => acc + curr.currentValue, 0);
     const concentrationPct = summary.totalAssets > 0 ? (top3Concentration / summary.totalAssets) * 100 : 0;
 
-    return { sectorList: donutSegments, sortedByWeight, concentrationPct, totalSectorsRaw: allSectors.length };
+    return { sectorList: donutSegments, sortedByWeight, concentrationPct, totalSectorsRaw: allSectors.length, otherSectorsDetails };
   }, [positions, summary.totalAssets]);
 
   // --- Tab 2: Performance Logic ---
@@ -324,29 +331,15 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 </div>
 
                 <div className="flex flex-col items-center relative">
-                    {/* SVG Donut Chart Optimized */}
-                    <div className="relative w-56 h-56 mb-8 filter drop-shadow-2xl">
-                        {/* Interactive SVG */}
+                    {/* SVG Donut Chart - STATIC VERSION */}
+                    <div className="relative w-56 h-56 mb-8 filter drop-shadow-2xl pointer-events-none">
                         <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
-                            <defs>
-                                <filter id="glow-filter" x="-50%" y="-50%" width="200%" height="200%">
-                                    <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
-                                    <feMerge>
-                                        <feMergeNode in="coloredBlur" />
-                                        <feMergeNode in="SourceGraphic" />
-                                    </feMerge>
-                                </filter>
-                            </defs>
-                            
                             {allocationData.sectorList.map((sector) => {
                                 if (sector.value === 0) return null;
-                                const isHovered = hoveredSector === sector.name;
                                 
-                                // Calculate stroke dash for donut segments
-                                // C = 2 * PI * r = 2 * 3.14159 * 16 ~ 100.5
                                 const radius = 16;
                                 const circumference = 100.5;
-                                const gap = 1.5; // Gap size
+                                const gap = 1.5; 
                                 const strokeLength = Math.max(0, sector.percent * circumference - gap);
                                 const strokeOffset = -sector.startPercent * circumference;
 
@@ -356,62 +349,36 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                         cx="20" cy="20" r={radius}
                                         fill="transparent"
                                         stroke={sector.color}
-                                        strokeWidth={isHovered ? "4" : "3"}
+                                        strokeWidth="3.5"
                                         strokeDasharray={`${strokeLength} ${circumference - strokeLength}`}
                                         strokeDashoffset={strokeOffset}
                                         strokeLinecap="round"
-                                        className="transition-all duration-300 cursor-pointer"
-                                        style={{ 
-                                            opacity: hoveredSector && !isHovered ? 0.2 : 1,
-                                            filter: isHovered ? 'url(#glow-filter)' : 'none',
-                                            transformOrigin: 'center',
-                                            transform: isHovered ? 'scale(1.02)' : 'scale(1)'
-                                        }}
-                                        onMouseEnter={() => setHoveredSector(sector.name)}
-                                        onMouseLeave={() => setHoveredSector(null)}
                                     />
                                 );
                             })}
                         </svg>
                         
-                        {/* Center Text Info */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-all duration-300">
-                            {hoveredSector ? (
-                                <>
-                                    <span className="text-[10px] text-slate-400 font-medium mb-1 animate-fade-in">{hoveredSector}</span>
-                                    <span className="text-lg font-bold text-white tracking-tight tabular-nums animate-fade-in">
-                                        {(allocationData.sectorList.find(s => s.name === hoveredSector)?.percent! * 100).toFixed(1)}%
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 tabular-nums animate-fade-in">
-                                        ${(allocationData.sectorList.find(s => s.name === hoveredSector)?.value! / 1000).toFixed(0)}k
-                                    </span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">總資產</span>
-                                    <span className="text-xl font-bold text-white tracking-tight tabular-nums">${(summary.totalAssets / 10000).toFixed(0)}萬</span>
-                                </>
-                            )}
+                        {/* Center Text Info - STATIC */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">總資產</span>
+                            <span className="text-xl font-bold text-white tracking-tight tabular-nums">${(summary.totalAssets / 10000).toFixed(0)}萬</span>
                         </div>
                     </div>
 
                     {/* Legend List */}
                     <div className="w-full space-y-2">
                          {allocationData.sectorList.map((sector) => {
-                             const isHovered = hoveredSector === sector.name;
                              return (
                                  <div 
                                     key={sector.name} 
-                                    className={`flex items-center justify-between p-2 rounded-xl transition-all duration-200 cursor-pointer border ${isHovered ? 'bg-slate-700/50 border-slate-600 shadow-md transform scale-[1.02]' : 'bg-transparent border-transparent hover:bg-slate-800/30'}`}
-                                    onMouseEnter={() => setHoveredSector(sector.name)}
-                                    onMouseLeave={() => setHoveredSector(null)}
+                                    className="flex items-center justify-between p-2 rounded-xl border bg-transparent border-transparent"
                                  >
                                      <div className="flex items-center gap-3 flex-1">
-                                         <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: sector.color, boxShadow: isHovered ? `0 0 8px ${sector.color}` : 'none' }}></div>
+                                         <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: sector.color }}></div>
                                          <div className="flex flex-col w-full pr-4">
                                              <div className="flex justify-between items-baseline mb-1">
-                                                <span className={`text-[11px] font-bold transition-colors ${isHovered ? 'text-white' : 'text-slate-400'}`}>{sector.name}</span>
-                                                <span className={`text-[11px] font-bold tabular-nums ${isHovered ? 'text-white' : 'text-slate-500'}`}>{(sector.percent * 100).toFixed(1)}%</span>
+                                                <span className="text-[11px] font-bold text-slate-400">{sector.name}</span>
+                                                <span className="text-[11px] font-bold tabular-nums text-slate-500">{(sector.percent * 100).toFixed(1)}%</span>
                                              </div>
                                              {/* Mini Progress Bar */}
                                              <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -423,6 +390,21 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                              );
                          })}
                     </div>
+
+                    {/* Others Breakdown List - NEW */}
+                    {allocationData.otherSectorsDetails.length > 0 && (
+                        <div className="w-full mt-4 pt-3 border-t border-dashed border-slate-700/50">
+                            <h4 className="text-[10px] text-slate-500 font-bold mb-2 ml-1">其他產業包含:</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {allocationData.otherSectorsDetails.map(other => (
+                                    <div key={other.name} className="flex items-center gap-1.5 bg-slate-800/40 px-2 py-1 rounded text-[10px] border border-slate-700/50">
+                                        <span className="text-slate-300 font-medium">{other.name}</span>
+                                        <span className="text-slate-500 tabular-nums">{other.percent.toFixed(1)}%</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </section>
 
