@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { PortfolioPosition, PortfolioSummary, Transaction, ProcessedTransaction } from '../types';
-import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown, ShieldCheck, Layers, ChevronDown, ChevronUp } from 'lucide-react';
+import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown, ShieldCheck, Layers, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 
 interface Props {
   positions: PortfolioPosition[];
@@ -17,16 +17,16 @@ enum AnalysisTab {
   INSIGHTS = '診斷'
 }
 
-// Chart Color Palette - Premium Fintech / Professional
+// Chart Color Palette - Premium Fintech / Professional (Optimized for Dark Mode)
 const CHART_COLORS = [
-  '#6366f1', // Indigo (Primary)
-  '#14b8a6', // Teal (Calm)
-  '#f43f5e', // Rose (Accent)
-  '#eab308', // Yellow (Warning)
-  '#8b5cf6', // Violet (Deep)
-  '#3b82f6', // Blue (Standard)
-  '#ec4899', // Pink (Vibrant)
-  '#84cc16', // Lime (Fresh)
+  '#3b82f6', // Blue 500
+  '#14b8a6', // Teal 500
+  '#8b5cf6', // Violet 500
+  '#f43f5e', // Rose 500
+  '#f59e0b', // Amber 500
+  '#10b981', // Emerald 500
+  '#ec4899', // Pink 500
+  '#6366f1', // Indigo 500
 ];
 
 const OTHERS_COLOR = '#64748b'; // Slate 500 for "Others" category
@@ -45,10 +45,11 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
     );
   }
 
+  const formatCurrency = (val: number) => Math.round(val).toLocaleString();
   const getColor = (val: number) => val > 0 ? 'text-twRed' : (val < 0 ? 'text-twGreen' : 'text-slate-400');
-  const getBgColor = (val: number) => val > 0 ? 'bg-twRed' : (val < 0 ? 'bg-twGreen' : 'bg-slate-600');
+  const getBgColor = (val: number) => val > 0 ? 'bg-twRed/10 text-twRed' : (val < 0 ? 'bg-twGreen/10 text-twGreen' : 'bg-slate-700 text-slate-400');
 
-  // --- Tab 1: Allocation Logic ---
+  // --- Tab 1: Allocation Logic (Redesigned) ---
   const allocationData = useMemo(() => {
     const sectorMap = new Map<string, number>();
     positions.forEach(pos => {
@@ -60,7 +61,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
 
-    const MAX_SLICES = 5;
+    const MAX_SLICES = 6;
     let displayList = [];
     let otherSectorsDetails: {name: string, value: number, percent: number}[] = [];
     
@@ -71,7 +72,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         
         displayList = topSectors.map((s, i) => ({
             ...s,
-            color: CHART_COLORS[i]
+            color: CHART_COLORS[i % CHART_COLORS.length]
         }));
         displayList.push({
             name: '其他產業',
@@ -79,12 +80,10 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
             color: OTHERS_COLOR
         });
 
-        // Calculate details for "Others"
         otherSectorsDetails = otherSectors.map(s => ({
             ...s,
             percent: summary.totalAssets > 0 ? (s.value / summary.totalAssets) * 100 : 0
         }));
-
     } else {
         displayList = allSectors.map((s, i) => ({
             ...s,
@@ -92,18 +91,30 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         }));
     }
 
-    // Pie Chart Calculation
-    // Using a standard circle with r=16 (circumference ~100) for easier math
+    // Modern Flat Donut Calculation
+    const radius = 40; 
+    const circumference = 2 * Math.PI * radius;
     let cumulativePercent = 0;
+    
     const donutSegments = displayList.map(sector => {
         const percent = summary.totalAssets > 0 ? (sector.value / summary.totalAssets) : 0;
-        const startPercent = cumulativePercent;
+        
+        // Gap Logic: Deduct a small amount of stroke length to create a gap if sector is significant
+        const gapSize = (displayList.length > 1 && percent > 0.02) ? 2 : 0; 
+        
+        const totalStroke = percent * circumference;
+        const visibleLength = Math.max(0, totalStroke - gapSize);
+        
+        // Rotation: Start at -90deg (top) + cumulative
+        const rotation = (cumulativePercent * 360) - 90;
         cumulativePercent += percent;
+
         return {
             ...sector,
             percent,
-            startPercent,
-            endPercent: cumulativePercent
+            visibleLength,
+            strokeDasharray: `${visibleLength} ${circumference - visibleLength}`,
+            rotation,
         };
     });
 
@@ -316,90 +327,92 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         </div>
       </header>
 
-      {/* --- ALLOCATION --- */}
+      {/* --- ALLOCATION (Redesigned Modern Flat Donut + List Legend) --- */}
       {activeSubTab === AnalysisTab.ALLOCATION && (
         <div className="space-y-4 animate-slide-up">
             
             <section className="bg-cardBg p-5 rounded-3xl border border-slate-700 shadow-xl">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-8">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <LayoutGrid size={16} className="text-emerald-400" /> 產業權重分佈
+                        <LayoutGrid size={16} className="text-blue-400" /> 產業權重分佈
                     </h3>
-                    <div className="text-[10px] font-numeric text-slate-500 bg-slate-800 px-2.5 py-1 rounded-full font-medium border border-slate-700">
-                        共 {allocationData.totalSectorsRaw} 類
+                    <div className="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded-full border border-slate-700">
+                        <Layers size={10} className="text-slate-400"/>
+                        <span className="text-[10px] font-bold text-slate-400">CR3: {allocationData.concentrationPct.toFixed(0)}%</span>
                     </div>
                 </div>
 
-                <div className="flex flex-col items-center relative">
-                    {/* SVG Donut Chart - STATIC VERSION */}
-                    <div className="relative w-56 h-56 mb-8 filter drop-shadow-2xl pointer-events-none">
-                        <svg viewBox="0 0 40 40" className="w-full h-full transform -rotate-90">
-                            {allocationData.sectorList.map((sector) => {
-                                if (sector.value === 0) return null;
+                <div className="flex flex-col gap-8">
+                    {/* Modern Flat Donut Chart */}
+                    <div className="flex justify-center relative">
+                        <div className="w-56 h-56 relative filter drop-shadow-xl">
+                             <svg viewBox="0 0 100 100" className="w-full h-full">
+                                {/* Track Background */}
+                                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#1e293b" strokeWidth="8" />
                                 
-                                const radius = 16;
-                                const circumference = 100.5;
-                                const gap = 1.5; 
-                                const strokeLength = Math.max(0, sector.percent * circumference - gap);
-                                const strokeOffset = -sector.startPercent * circumference;
-
-                                return (
-                                    <circle
-                                        key={sector.name}
-                                        cx="20" cy="20" r={radius}
-                                        fill="transparent"
-                                        stroke={sector.color}
-                                        strokeWidth="3.5"
-                                        strokeDasharray={`${strokeLength} ${circumference - strokeLength}`}
-                                        strokeDashoffset={strokeOffset}
-                                        strokeLinecap="round"
-                                    />
-                                );
-                            })}
-                        </svg>
-                        
-                        {/* Center Text Info - STATIC */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">總資產</span>
-                            <span className="text-xl font-bold text-white tracking-tight tabular-nums">${(summary.totalAssets / 10000).toFixed(0)}萬</span>
+                                {/* Segments */}
+                                {allocationData.sectorList.map((sector, idx) => {
+                                    if (sector.percent <= 0) return null;
+                                    return (
+                                        <circle
+                                            key={sector.name}
+                                            cx="50" cy="50" r="40"
+                                            fill="transparent"
+                                            stroke={sector.color}
+                                            strokeWidth="10" // Slightly thicker than track
+                                            strokeDasharray={sector.strokeDasharray}
+                                            strokeLinecap="butt" // Flat Caps
+                                            transform={`rotate(${sector.rotation} 50 50)`}
+                                            className="transition-all duration-700 ease-out"
+                                        />
+                                    );
+                                })}
+                            </svg>
+                            {/* Center Info */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">總資產</span>
+                                <span className="text-xl font-bold text-white tracking-tight tabular-nums">
+                                    ${(summary.totalAssets / 10000).toFixed(0)}萬
+                                </span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Legend List */}
-                    <div className="w-full space-y-2">
-                         {allocationData.sectorList.map((sector) => {
-                             return (
-                                 <div 
-                                    key={sector.name} 
-                                    className="flex items-center justify-between p-2 rounded-xl border bg-transparent border-transparent"
-                                 >
-                                     <div className="flex items-center gap-3 flex-1">
-                                         <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: sector.color }}></div>
-                                         <div className="flex flex-col w-full pr-4">
-                                             <div className="flex justify-between items-baseline mb-1">
-                                                <span className="text-[11px] font-bold text-slate-400">{sector.name}</span>
-                                                <span className="text-[11px] font-bold tabular-nums text-slate-500">{(sector.percent * 100).toFixed(1)}%</span>
-                                             </div>
-                                             {/* Mini Progress Bar */}
-                                             <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                                                 <div className="h-full rounded-full opacity-60" style={{ width: `${sector.percent * 100}%`, backgroundColor: sector.color }}></div>
-                                             </div>
-                                         </div>
+                    {/* List Legend (Redesigned) */}
+                    <div className="flex flex-col gap-3">
+                         {allocationData.sectorList.map((sector) => (
+                             <div key={sector.name} className="group">
+                                 {/* Top Row */}
+                                 <div className="flex items-center justify-between mb-1.5">
+                                     <div className="flex items-center gap-3">
+                                         <div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ backgroundColor: sector.color }}></div>
+                                         <span className="text-xs font-bold text-slate-200">{sector.name}</span>
+                                     </div>
+                                     <div className="flex items-center gap-3 text-xs">
+                                         <span className="font-bold text-white tabular-nums">{(sector.percent * 100).toFixed(1)}%</span>
+                                         <span className="text-slate-500 tabular-nums w-16 text-right font-medium">${formatCurrency(sector.value)}</span>
                                      </div>
                                  </div>
-                             );
-                         })}
+                                 {/* Progress Bar */}
+                                 <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                                     <div 
+                                        className="h-full rounded-full transition-all duration-1000 ease-out" 
+                                        style={{ width: `${sector.percent * 100}%`, backgroundColor: sector.color }}
+                                     ></div>
+                                 </div>
+                             </div>
+                         ))}
                     </div>
 
-                    {/* Others Breakdown List - NEW */}
+                    {/* Others Detail */}
                     {allocationData.otherSectorsDetails.length > 0 && (
-                        <div className="w-full mt-4 pt-3 border-t border-dashed border-slate-700/50">
-                            <h4 className="text-[10px] text-slate-500 font-bold mb-2 ml-1">其他產業包含:</h4>
+                        <div className="pt-3 border-t border-dashed border-slate-700/50">
+                            <span className="text-[10px] text-slate-500 font-bold mb-2 block uppercase tracking-wider">其他產業明細</span>
                             <div className="flex flex-wrap gap-2">
-                                {allocationData.otherSectorsDetails.map(other => (
-                                    <div key={other.name} className="flex items-center gap-1.5 bg-slate-800/40 px-2 py-1 rounded text-[10px] border border-slate-700/50">
-                                        <span className="text-slate-300 font-medium">{other.name}</span>
-                                        <span className="text-slate-500 tabular-nums">{other.percent.toFixed(1)}%</span>
+                                {allocationData.otherSectorsDetails.map(d => (
+                                    <div key={d.name} className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded px-2 py-1">
+                                        <span className="text-[10px] text-slate-300">{d.name}</span>
+                                        <span className="text-[10px] text-slate-500 font-medium">{d.percent.toFixed(1)}%</span>
                                     </div>
                                 ))}
                             </div>
@@ -408,49 +421,44 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 </div>
             </section>
 
-            {/* Individual Holdings Card */}
-            <section className="bg-cardBg p-4 rounded-2xl border border-slate-700 shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                        <PieChart size={14} className="text-blue-400" /> 持股權重排行
+             {/* Holdings Ranking (Redesigned to match List Legend) */}
+            <section className="bg-cardBg p-5 rounded-3xl border border-slate-700 shadow-md">
+                <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <PieChart size={16} className="text-blue-400" /> 持股權重排行
                     </h3>
-                    
-                    <div 
-                        title="前三大持股集中度 (CR3)：前三名持股佔總資產的比例。數值越高代表風險越集中。"
-                        className={`px-2 py-0.5 rounded-full border flex items-center gap-1 cursor-help transition-opacity hover:opacity-80 ${allocationData.concentrationPct > 70 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
-                    >
-                        <Layers size={10} />
-                        <span className="text-[9px] font-bold tabular-nums">CR3: {allocationData.concentrationPct.toFixed(0)}%</span>
-                    </div>
                 </div>
 
                 {allocationData.sortedByWeight.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                       {visibleHoldings.map((pos, idx) => {
                           const weight = summary.totalAssets > 0 ? (pos.currentValue / summary.totalAssets) * 100 : 0;
+                          const barColor = idx < 3 ? '#3b82f6' : '#64748b'; // Top 3 Blue, others Slate
+
                           return (
-                              <div key={pos.symbol} className="relative group">
-                                  <div className="flex justify-between items-center mb-1 relative z-10">
+                              <div key={pos.symbol} className="group">
+                                  {/* Top Row */}
+                                  <div className="flex justify-between items-center mb-1.5">
                                       <div className="flex items-center gap-3">
-                                          <div className={`w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold border tabular-nums ${idx < 3 ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
+                                          <div className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold border tabular-nums ${idx < 3 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
                                               {idx + 1}
                                           </div>
-                                          <div className="flex flex-col">
-                                              <span className="text-xs font-semibold text-slate-200 group-hover:text-blue-400 transition-colors">{pos.name}</span>
+                                          <div>
+                                              <span className="text-xs font-bold text-slate-200 mr-2">{pos.name}</span>
+                                              <span className="text-[10px] text-slate-500 font-medium">{pos.symbol}</span>
                                           </div>
                                       </div>
-                                      <div className="text-right flex items-baseline gap-2">
-                                          <span className="text-[9px] text-slate-500 tabular-nums hidden xs:inline">${(pos.currentValue / 1000).toFixed(0)}k</span>
-                                          <span className="text-xs font-bold text-white w-10 text-right tabular-nums">{weight.toFixed(1)}%</span>
-                                      </div>
+                                      <span className="text-xs font-bold text-white tabular-nums">{weight.toFixed(1)}%</span>
                                   </div>
                                   
+                                  {/* Progress Bar */}
                                   <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                                       <div 
                                         className="h-full rounded-full transition-all duration-1000 ease-out"
                                         style={{ 
                                             width: `${weight}%`,
-                                            backgroundColor: CHART_COLORS[idx % CHART_COLORS.length], 
+                                            backgroundColor: barColor,
+                                            opacity: idx < 3 ? 1 : 0.6
                                         }} 
                                       />
                                   </div>
@@ -461,12 +469,12 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                       {allocationData.sortedByWeight.length > 5 && (
                           <button 
                             onClick={() => setShowAllHoldings(!showAllHoldings)}
-                            className="w-full py-2 mt-1 flex items-center justify-center gap-2 text-[10px] font-bold text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-800 rounded-lg transition-all active:scale-95"
+                            className="w-full mt-5 py-2.5 text-[10px] font-bold text-slate-500 hover:text-white bg-slate-800/30 hover:bg-slate-800 rounded-xl transition-all flex items-center justify-center gap-1 active:scale-95 border border-transparent hover:border-slate-700"
                           >
                               {showAllHoldings ? (
                                   <>收合清單 <ChevronUp size={12} /></>
                               ) : (
-                                  <>查看全部持股 (還有 {hiddenCount} 檔) <ChevronDown size={12} /></>
+                                  <>查看全部持股 (還有 {hiddenCount} 檔) <ChevronRight size={12} /></>
                               )}
                           </button>
                       )}

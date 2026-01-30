@@ -178,16 +178,16 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
         </div>
       </div>
 
-      {/* Share Button Area */}
+      {/* Share Button Area - COMPACT VERSION */}
       <div className="flex items-center justify-center">
         <button
             onClick={() => setShowShareModal(true)}
-            className="w-full bg-slate-800/80 hover:bg-slate-700/80 active:scale-[0.98] transition-all border border-slate-700/50 p-3 rounded-xl flex items-center justify-center gap-2 group shadow-sm"
+            className="w-full bg-slate-800/80 hover:bg-slate-700/80 active:scale-[0.98] transition-all border border-slate-700/50 py-2.5 rounded-xl flex items-center justify-center gap-2 group shadow-sm"
         >
-            <div className="p-1.5 bg-blue-500/10 rounded-full group-hover:bg-blue-500/20 transition-colors">
-                <Share2 size={16} className="text-blue-400" />
+            <div className="p-1 bg-blue-500/10 rounded-full group-hover:bg-blue-500/20 transition-colors">
+                <Share2 size={14} className="text-blue-400" />
             </div>
-            <span className="text-sm font-bold text-slate-300 group-hover:text-white">分享戰報圖卡</span>
+            <span className="text-xs font-bold text-slate-300 group-hover:text-white">分享戰報圖卡</span>
         </button>
       </div>
 
@@ -288,21 +288,21 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
         )}
       </div>
 
-      {/* --- SHARE MODAL (Optimized for Manual Screenshot) --- */}
+      {/* --- SHARE MODAL (Restored to Larger Size) --- */}
       {showShareModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in" onClick={() => setShowShareModal(false)}>
             <div className="w-full max-w-sm flex flex-col items-center gap-4" onClick={e => e.stopPropagation()}>
                 
-                {/* The Vertical Card - Center Stage */}
+                {/* The Vertical Card - Center Stage - RESTORED HEIGHT to 75vh */}
                 <div className={`w-full aspect-[9/16] max-h-[75vh] rounded-3xl overflow-hidden shadow-2xl relative flex flex-col border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-b from-red-900 via-slate-900 to-slate-950' : 'bg-gradient-to-b from-emerald-900 via-slate-900 to-slate-950'}`}>
                     
                     {/* Card Content - Centered */}
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6">
+                    <div className="flex-1 flex flex-col items-center justify-center p-5 text-center space-y-5">
                         
                         {/* Header */}
                         <div className="flex flex-col items-center gap-2">
                              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg border border-white/10 ${summary.dayPL >= 0 ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
-                                {summary.dayPL >= 0 ? <TrendingUp size={32} className="text-white" /> : <TrendingDown size={32} className="text-white" />}
+                                {summary.dayPL >= 0 ? <TrendingUp size={28} className="text-white" /> : <TrendingDown size={28} className="text-white" />}
                             </div>
                             <div className="space-y-0.5">
                                 <h3 className="text-slate-200 text-xs font-bold uppercase tracking-[0.3em] mb-1">今日戰報</h3>
@@ -310,8 +310,8 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                             </div>
                         </div>
 
-                        {/* Main Number */}
-                        <div className="space-y-2">
+                        {/* Main Number - RESTORED FONT SIZE */}
+                        <div className="space-y-1">
                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">今日損益</div>
                              <div className={`text-4xl font-black tabular-nums tracking-tight drop-shadow-md ${summary.dayPL >= 0 ? 'text-red-100' : 'text-emerald-100'}`}>
                                 {shareMaskAmount ? '****' : (
@@ -321,9 +321,9 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         </div>
 
                         {/* Secondary Stats Row */}
-                        <div className="grid grid-cols-2 gap-3 w-full max-w-[240px]">
+                        <div className="grid grid-cols-2 gap-3 w-full max-w-[220px]">
                             {/* ROI */}
-                            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/5 flex flex-col items-center gap-1">
+                            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/5 flex flex-col items-center gap-0.5">
                                 <span className="text-[9px] text-slate-400 font-bold uppercase">日報酬率</span>
                                 <span className={`text-base font-bold tabular-nums ${summary.dayPL >= 0 ? 'text-red-300' : 'text-emerald-300'}`}>
                                      {(() => {
@@ -334,7 +334,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                                 </span>
                             </div>
                             {/* Realized */}
-                            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/5 flex flex-col items-center gap-1">
+                            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/5 flex flex-col items-center gap-0.5">
                                 <span className="text-[9px] text-slate-400 font-bold uppercase">今日已實現</span>
                                 <span className={`text-base font-bold tabular-nums ${summary.dayRealizedPL >= 0 ? 'text-red-300' : 'text-emerald-300'}`}>
                                     {shareMaskAmount ? '****' : (
@@ -345,11 +345,11 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                         </div>
 
                         {/* Top Performers */}
-                        <div className="w-full max-w-[260px] bg-black/20 rounded-2xl p-4 border border-white/5">
+                        <div className="w-full max-w-[240px] bg-black/20 rounded-2xl p-4 border border-white/5">
                              <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-3 flex items-center justify-center gap-1.5">
-                                <Trophy size={10} className="text-yellow-500" /> 今日焦點
+                                <Trophy size={12} className="text-yellow-500" /> 今日焦點
                              </h4>
-                             <div className="space-y-2.5">
+                             <div className="space-y-2">
                                  {topPerformers.length > 0 ? topPerformers.slice(0, 3).map(p => (
                                      <div key={p.symbol} className="flex items-center justify-between border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
                                          <span className="text-xs font-bold text-slate-200">{p.name}</span>
@@ -362,7 +362,7 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                                              </span>
                                          </div>
                                      </div>
-                                 )) : <div className="text-xs text-slate-500 italic">無顯著變動</div>}
+                                 )) : <div className="text-[10px] text-slate-500 italic">無顯著變動</div>}
                              </div>
                         </div>
                     </div>
