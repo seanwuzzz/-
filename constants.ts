@@ -1,7 +1,7 @@
 
 import { Transaction, StockPrice } from './types';
 
-export const APP_VERSION = "v1.9.3 (Notes)";
+export const APP_VERSION = "v1.9.4 (News Fix)";
 
 export const DEMO_PRICES: StockPrice[] = [
   { symbol: '2330', price: 780, changePercent: 1.5, name: '台積電', sector: '半導體', beta: 1.2 },
@@ -18,8 +18,8 @@ export const DEMO_TRANSACTIONS: Transaction[] = [
 
 export const GAS_SCRIPT_TEMPLATE = `
 /**
- * Google Apps Script 後端程式碼 v1.9.3
- * 更新：支援交易心得 (Col 9)
+ * Google Apps Script 後端程式碼 v1.9.4
+ * 更新：修復新聞查詢功能 (Google News RSS)
  */
 
 function GET_YAHOO_BETA(symbol) {
@@ -76,8 +76,54 @@ function doGet(e) {
   
   // --- GET_NEWS ---
   if (action === "GET_NEWS") {
-    // ... (News logic same as before)
-    return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
+    var symbol = e.parameter.symbol;
+    var name = e.parameter.name || "";
+    var query = symbol + " " + name;
+    
+    // 使用 Google News RSS 搜尋
+    var rssUrl = "https://news.google.com/rss/search?q=" + encodeURIComponent(query) + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
+    
+    try {
+      var xml = UrlFetchApp.fetch(rssUrl).getContentText();
+      var doc = XmlService.parse(xml);
+      var root = doc.getRootElement();
+      var channel = root.getChild("channel");
+      var items = channel.getChildren("item");
+      var newsList = [];
+      
+      // 取前 8 則
+      var limit = Math.min(items.length, 8);
+      for (var i = 0; i < limit; i++) {
+        var item = items[i];
+        var title = item.getChildText("title");
+        var link = item.getChildText("link");
+        var pubDate = item.getChildText("pubDate");
+        var sourceNode = item.getChild("source");
+        var source = sourceNode ? sourceNode.getText() : "Google News";
+        var description = item.getChildText("description") || "";
+        
+        // 簡單移除 HTML 標籤
+        var snippet = description.replace(/<[^>]+>/g, "").substring(0, 100) + "...";
+        
+        // 格式化日期 MM/DD HH:mm
+        var d = new Date(pubDate);
+        var formattedDate = (d.getMonth() + 1) + "/" + d.getDate() + " " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+
+        newsList.push({
+          title: title,
+          url: link,
+          source: source,
+          date: formattedDate,
+          snippet: snippet,
+          _ts: d.getTime()
+        });
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify(newsList)).setMimeType(ContentService.MimeType.JSON);
+    } catch (e) {
+      // 失敗回傳空陣列
+      return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
+    }
   }
 
   // --- GET_DATA ---
@@ -212,7 +258,7 @@ function checkAndAddPriceRow(priceSheet, cleanSymbol) {
     priceSheet.getRange(nextRow, 2).setFormula('=GET_TW_PRICE(A' + nextRow + ')');
     priceSheet.getRange(nextRow, 3).setFormula('=GET_STOCK_CHANGE(A' + nextRow + ')');
     priceSheet.getRange(nextRow, 4).setFormula('=getStockSector(A' + nextRow + ')');
-    priceSheet.getRange(nextRow, 5).setFormula('=GET_YAHOO_BETA(A' + nextRow + ')');
+    priceSheet.getRange(nextRow, 5).setFormula('=BETA_6M(A' + nextRow + ')');
   }
 }
 
