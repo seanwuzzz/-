@@ -23,7 +23,8 @@ import {
   TrendingDown,
   Coins,
   StickyNote,
-  Save
+  Save,
+  Percent
 } from 'lucide-react';
 
 interface Props {
@@ -473,6 +474,11 @@ const HistoryList: React.FC<Props> = ({
             ) : (
                 filteredClosedTrades.map((trade, idx) => {
                     const isProfit = trade.realizedPL >= 0;
+                    // Calculate Annualized ROI: ((1 + roi/100)^(365/days)) - 1
+                    const annualizedRoi = trade.holdDays > 0 
+                        ? ((Math.pow(1 + trade.roi / 100, 365 / trade.holdDays) - 1) * 100) 
+                        : 0;
+
                     return (
                         <div key={`${trade.id}-${idx}`} className="bg-cardBg rounded-xl border border-slate-700/50 shadow-sm overflow-hidden relative group hover:border-blue-500/50 transition-all duration-300">
                             
@@ -492,13 +498,28 @@ const HistoryList: React.FC<Props> = ({
                                             <span>持有 {trade.holdDays} 天</span>
                                         </div>
                                     </div>
+                                    
                                     <div className="text-right">
                                         <div className={`text-lg font-bold tabular-nums tracking-tight ${getColor(trade.realizedPL)}`}>
                                             {trade.realizedPL > 0 ? '+' : ''}{formatCurrency(trade.realizedPL)}
                                         </div>
-                                        <div className={`text-[9px] font-bold inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md mt-0.5 ${getBgColor(trade.realizedPL)}`}>
-                                            {isProfit ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
-                                            {trade.roi.toFixed(2)}%
+                                        
+                                        <div className="flex flex-col items-end gap-1 mt-0.5">
+                                            {/* Absolute ROI */}
+                                            <div className={`text-[9px] font-bold inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${getBgColor(trade.realizedPL)}`}>
+                                                {isProfit ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+                                                {trade.roi.toFixed(2)}%
+                                            </div>
+
+                                            {/* Annualized ROI (Only if held for >= 1 day) */}
+                                            {trade.holdDays > 0 && (
+                                                <div className="flex items-center gap-1 text-[9px] text-slate-400">
+                                                    <span className="opacity-70">年化</span>
+                                                    <span className={`font-bold tabular-nums ${annualizedRoi >= 0 ? 'text-twRed' : 'text-twGreen'}`}>
+                                                        {annualizedRoi.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
