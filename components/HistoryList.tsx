@@ -37,13 +37,13 @@ interface Props {
   news?: StockNews[];
   newsLoading?: boolean;
   prices?: StockPrice[];
-  onUpdateNote: (id: string, note: string) => Promise<void>; // New Prop for updating notes
+  onUpdateNote: (id: string, note: string) => Promise<void>; 
 }
 
 type SortField = 'date' | 'amount';
 type SortOrder = 'desc' | 'asc';
 type ViewMode = 'TRANSACTIONS' | 'REALIZED';
-type FilterType = 'ALL' | 'BUY' | 'SELL';
+type FilterType = 'ALL' | 'BUY' | 'SELL' | 'DIVIDEND';
 
 const HistoryList: React.FC<Props> = ({ 
   transactions, 
@@ -196,7 +196,6 @@ const HistoryList: React.FC<Props> = ({
   }, [closedTrades, keyword, startDate, endDate]);
 
   const inputClass = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors";
-  // Locking height and appearance for iOS consistency
   const dateInputClass = `${inputClass} h-[34px] appearance-none`;
 
   return (
@@ -233,7 +232,6 @@ const HistoryList: React.FC<Props> = ({
                     {showFilters ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
                 </button>
                 
-                {/* Visible "Clear Filter" Button when filters are active */}
                 {hasActiveFilters && (
                     <button 
                         onClick={handleClearAllFilters}
@@ -269,24 +267,24 @@ const HistoryList: React.FC<Props> = ({
 
                     {/* Type Filter */}
                     {viewMode === 'TRANSACTIONS' && (
-                        <div className="grid grid-cols-3 gap-2">
-                            {(['ALL', 'BUY', 'SELL'] as const).map((type) => (
+                        <div className="grid grid-cols-4 gap-2">
+                            {(['ALL', 'BUY', 'SELL', 'DIVIDEND'] as const).map((type) => (
                                 <button
                                     key={type}
                                     onClick={() => setFilterType(type)}
                                     className={`py-1.5 rounded-lg text-[10px] font-bold border transition-all active:scale-95 ${
                                         filterType === type 
-                                            ? (type === 'BUY' ? 'bg-twRed/20 border-twRed/50 text-twRed' : type === 'SELL' ? 'bg-twGreen/20 border-twGreen/50 text-twGreen' : 'bg-slate-600 border-slate-500 text-white')
+                                            ? (type === 'BUY' ? 'bg-twRed/20 border-twRed/50 text-twRed' : type === 'SELL' ? 'bg-twGreen/20 border-twGreen/50 text-twGreen' : type === 'DIVIDEND' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-500' : 'bg-slate-600 border-slate-500 text-white')
                                             : 'bg-slate-800/50 border-transparent text-slate-500 hover:bg-slate-800'
                                     }`}
                                 >
-                                    {type === 'ALL' ? '全部' : type === 'BUY' ? '買進' : '賣出'}
+                                    {type === 'ALL' ? '全部' : type === 'BUY' ? '買進' : type === 'SELL' ? '賣出' : '股利'}
                                 </button>
                             ))}
                         </div>
                     )}
 
-                    {/* Date Range - Fixed Height */}
+                    {/* Date Range */}
                     <div className="grid grid-cols-2 gap-2">
                         <div>
                             <label className="text-[9px] text-slate-500 mb-0.5 block ml-1">起始日期</label>
@@ -317,7 +315,7 @@ const HistoryList: React.FC<Props> = ({
         )}
       </div>
 
-      {/* --- News Section (Compact) --- */}
+      {/* --- News Section --- */}
       {keyword && viewMode === 'TRANSACTIONS' && (
         <div className="bg-cardBg rounded-xl border border-slate-700/50 mb-2 overflow-hidden shadow-sm">
             <button 
@@ -355,7 +353,7 @@ const HistoryList: React.FC<Props> = ({
         </div>
       )}
 
-      {/* --- Transactions List (Highly Compact) --- */}
+      {/* --- Transactions List --- */}
       {viewMode === 'TRANSACTIONS' && (
         <div className="space-y-2">
             {sortedTransactions.length === 0 ? (
@@ -366,6 +364,7 @@ const HistoryList: React.FC<Props> = ({
             ) : (
                 sortedTransactions.map((tx) => {
                     const isBuy = tx.type === 'BUY';
+                    const isDividend = tx.type === 'DIVIDEND';
                     const priceData = prices?.find(p => p.symbol === tx.symbol);
                     const currentPrice = priceData ? priceData.price : 0;
                     
@@ -391,23 +390,23 @@ const HistoryList: React.FC<Props> = ({
                             )}
 
                             <div className="p-3 relative z-10">
-                                {/* Header: Symbol + Name + Type | Amount */}
+                                {/* Header */}
                                 <div className="flex justify-between items-center mb-1.5">
                                     <div className="flex items-center gap-2 overflow-hidden">
                                         <span className="text-lg font-bold text-white tabular-nums tracking-tight">{tx.symbol}</span>
-                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${isBuy ? 'bg-twRed/10 border-twRed/20 text-twRed' : 'bg-twGreen/10 border-twGreen/20 text-twGreen'}`}>
-                                            {isBuy ? '買進' : '賣出'}
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${isBuy ? 'bg-twRed/10 border-twRed/20 text-twRed' : isDividend ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500' : 'bg-twGreen/10 border-twGreen/20 text-twGreen'}`}>
+                                            {isBuy ? '買進' : isDividend ? '領息' : '賣出'}
                                         </span>
                                         <span className="text-[10px] text-slate-400 truncate max-w-[80px]">{tx.name}</span>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-base font-bold text-white tabular-nums tracking-tight">
+                                        <div className={`text-base font-bold tabular-nums tracking-tight ${isDividend ? 'text-yellow-500' : 'text-white'}`}>
                                             ${formatCurrency(tx.totalAmount)}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Detail Row: Date | Shares x Price | P/L */}
+                                {/* Detail Row */}
                                 <div className="flex items-center justify-between text-[10px] text-slate-400 bg-slate-900/30 rounded-lg p-2 border border-slate-700/30">
                                     <div className="flex items-center gap-2">
                                         <span className="tabular-nums opacity-80">{tx.date}</span>
@@ -418,7 +417,9 @@ const HistoryList: React.FC<Props> = ({
                                     </div>
                                     
                                     <div className="tabular-nums font-bold">
-                                         {tx.realizedPL !== undefined ? (
+                                         {isDividend ? (
+                                            <span className="text-yellow-500/80">匯費: ${tx.fee}</span>
+                                         ) : tx.realizedPL !== undefined ? (
                                             <span className={getColor(tx.realizedPL)}>
                                                 {tx.realizedPL > 0 ? '+' : ''}{formatCurrency(tx.realizedPL)}
                                             </span>
@@ -463,7 +464,7 @@ const HistoryList: React.FC<Props> = ({
         </div>
       )}
 
-      {/* --- Realized Trades List (Compact Journey) --- */}
+      {/* --- Realized Trades List --- */}
       {viewMode === 'REALIZED' && (
         <div className="space-y-3">
             {filteredClosedTrades.length === 0 ? (
@@ -474,19 +475,14 @@ const HistoryList: React.FC<Props> = ({
             ) : (
                 filteredClosedTrades.map((trade, idx) => {
                     const isProfit = trade.realizedPL >= 0;
-                    // Calculate Annualized ROI: ((1 + roi/100)^(365/days)) - 1
                     const annualizedRoi = trade.holdDays > 0 
                         ? ((Math.pow(1 + trade.roi / 100, 365 / trade.holdDays) - 1) * 100) 
                         : 0;
 
                     return (
                         <div key={`${trade.id}-${idx}`} className="bg-cardBg rounded-xl border border-slate-700/50 shadow-sm overflow-hidden relative group hover:border-blue-500/50 transition-all duration-300">
-                            
-                            {/* Decorative Background Glow - Fainter */}
                             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-[50px] opacity-10 pointer-events-none ${isProfit ? 'bg-twRed' : 'bg-twGreen'}`}></div>
-
                             <div className="p-3 relative z-10">
-                                {/* Header: Symbol | P/L */}
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex flex-col">
                                         <div className="flex items-center gap-2">
@@ -503,15 +499,11 @@ const HistoryList: React.FC<Props> = ({
                                         <div className={`text-lg font-bold tabular-nums tracking-tight ${getColor(trade.realizedPL)}`}>
                                             {trade.realizedPL > 0 ? '+' : ''}{formatCurrency(trade.realizedPL)}
                                         </div>
-                                        
                                         <div className="flex flex-col items-end gap-1 mt-0.5">
-                                            {/* Absolute ROI */}
                                             <div className={`text-[9px] font-bold inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ${getBgColor(trade.realizedPL)}`}>
                                                 {isProfit ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
                                                 {trade.roi.toFixed(2)}%
                                             </div>
-
-                                            {/* Annualized ROI (Only if held for >= 1 day) */}
                                             {trade.holdDays > 0 && (
                                                 <div className="flex items-center gap-1 text-[9px] text-slate-400">
                                                     <span className="opacity-70">年化</span>
@@ -523,8 +515,6 @@ const HistoryList: React.FC<Props> = ({
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Journey Row */}
                                 <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-900/30 p-2 rounded-lg border border-slate-700/30">
                                     <div className="flex items-center justify-between">
                                         <span className="text-slate-500 font-light flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-twRed"></div>買</span>
@@ -535,8 +525,6 @@ const HistoryList: React.FC<Props> = ({
                                         <span className="tabular-nums text-slate-300 font-medium">{trade.sellDate} @ {trade.sellPrice.toFixed(0)}</span>
                                     </div>
                                 </div>
-
-                                {/* Notes Section */}
                                 <div className="mt-2 flex items-start gap-2">
                                      <button 
                                         onClick={() => handleOpenNoteModal(trade.id, trade.notes)}
@@ -557,7 +545,6 @@ const HistoryList: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Note Editor Modal */}
       {editingNoteId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setEditingNoteId(null)}>
               <div className="bg-slate-800 w-full max-w-sm rounded-2xl border border-slate-700 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>

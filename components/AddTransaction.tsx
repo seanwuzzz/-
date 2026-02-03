@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Transaction } from '../types';
 import { PlusCircle, Loader2, Calculator, AlertCircle, Save, X, StickyNote } from 'lucide-react';
@@ -12,11 +11,20 @@ interface Props {
 const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
   const [loading, setLoading] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    date: string;
+    symbol: string;
+    name: string;
+    type: 'BUY' | 'SELL' | 'DIVIDEND';
+    shares: string;
+    price: string;
+    fee: string;
+    notes: string;
+  }>({
     date: new Date().toISOString().split('T')[0],
     symbol: '',
     name: '',
-    type: 'BUY' as 'BUY' | 'SELL',
+    type: 'BUY',
     shares: '',
     price: '',
     fee: '20',
@@ -38,6 +46,17 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
     }
   }, [initialData]);
 
+  // 切換交易類型時，調整預設手續費/匯費
+  const handleTypeChange = (newType: 'BUY' | 'SELL' | 'DIVIDEND') => {
+      let defaultFee = formData.fee;
+      if (newType === 'DIVIDEND') {
+          defaultFee = '10'; // 股利匯費通常為 10 元
+      } else if (formData.type === 'DIVIDEND') {
+          defaultFee = '20'; // 買賣預設
+      }
+      setFormData({ ...formData, type: newType, fee: defaultFee });
+  };
+
   const handleSymbolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     setFormData({ ...formData, symbol: val });
@@ -45,6 +64,12 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
 
   const handleAutoCalculateFee = () => {
     setFeeError(null);
+
+    if (formData.type === 'DIVIDEND') {
+        // 股利不需要計算手續費比例，通常是固定的
+        setFeeError("股利通常為固定匯費 (如 $10)，無需比例試算");
+        return;
+    }
 
     if (!formData.price || !formData.shares) {
       setFeeError("請先輸入「股數」與「成交價」");
@@ -111,7 +136,7 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-                <label className="block text-xs text-slate-400 mb-1">日期</label>
+                <label className="block text-xs text-slate-400 mb-1">日期 {formData.type === 'DIVIDEND' ? '(入帳日)' : ''}</label>
                 <input
                     type="date"
                     required
@@ -146,25 +171,25 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
           </div>
 
           <div className="flex gap-2 bg-slate-800 p-1 rounded-lg h-[46px] items-center">
-            {(['BUY', 'SELL'] as const).map(type => (
+            {(['BUY', 'SELL', 'DIVIDEND'] as const).map(type => (
                 <button
                     key={type}
                     type="button"
-                    onClick={() => setFormData({...formData, type})}
+                    onClick={() => handleTypeChange(type)}
                     className={`flex-1 h-full rounded-md text-sm font-bold transition-all ${
                         formData.type === type 
-                            ? (type === 'BUY' ? 'bg-twRed text-white shadow-md' : 'bg-twGreen text-white shadow-md')
+                            ? (type === 'BUY' ? 'bg-twRed text-white shadow-md' : type === 'SELL' ? 'bg-twGreen text-white shadow-md' : 'bg-yellow-500 text-white shadow-md')
                             : 'text-slate-400 hover:text-white'
                     }`}
                 >
-                    {type === 'BUY' ? '買進' : '賣出'}
+                    {type === 'BUY' ? '買進' : type === 'SELL' ? '賣出' : '領息'}
                 </button>
             ))}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
              <div>
-                <label className="block text-xs text-slate-400 mb-1">股數</label>
+                <label className="block text-xs text-slate-400 mb-1">{formData.type === 'DIVIDEND' ? '持有股數 (配息基準)' : '股數'}</label>
                 <input
                     type="number"
                     required
@@ -179,13 +204,13 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
                 />
             </div>
             <div>
-                <label className="block text-xs text-slate-400 mb-1">成交價</label>
+                <label className="block text-xs text-slate-400 mb-1">{formData.type === 'DIVIDEND' ? '每股配息 (現金)' : '成交價'}</label>
                 <input
                     type="number"
                     required
                     inputMode="decimal"
                     step="0.01"
-                    placeholder="580"
+                    placeholder={formData.type === 'DIVIDEND' ? "2.5" : "580"}
                     value={formData.price}
                     onChange={e => {
                         setFormData({...formData, price: e.target.value});
@@ -198,7 +223,9 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
 
           <div>
              <label className="block text-xs text-slate-400 mb-1 flex justify-between">
-                <span>手續費 ({formData.type === 'BUY' ? '0.1425%' : '0.4425%'})</span>
+                <span>
+                    {formData.type === 'DIVIDEND' ? '匯費 / 手續費' : `手續費 (${formData.type === 'BUY' ? '0.1425%' : '0.4425%'})`}
+                </span>
              </label>
              <div className="relative">
                 <input
@@ -212,7 +239,8 @@ const AddTransaction: React.FC<Props> = ({ onAdd, onCancel, initialData }) => {
                 <button
                     type="button"
                     onClick={handleAutoCalculateFee}
-                    className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-700 hover:bg-slate-600 text-blue-400 rounded-md text-xs font-bold flex items-center gap-1 transition-colors border border-slate-600 active:scale-95"
+                    disabled={formData.type === 'DIVIDEND'}
+                    className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md text-xs font-bold flex items-center gap-1 transition-colors border active:scale-95 ${formData.type === 'DIVIDEND' ? 'bg-slate-800 text-slate-600 border-transparent cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600 text-blue-400 border-slate-600'}`}
                 >
                     <Calculator size={12} />
                     自動試算

@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { PortfolioPosition, PortfolioSummary, Transaction, ProcessedTransaction } from '../types';
-import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown, ShieldCheck, Layers, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { PieChart, BarChart3, Info, LayoutGrid, Flame, Activity, TrendingUp, Target, BrainCircuit, Calendar, Award, Zap, CalendarRange, TrendingDown, ShieldCheck, Layers, ChevronDown, ChevronUp, ChevronRight, Coins } from 'lucide-react';
 
 interface Props {
   positions: PortfolioPosition[];
@@ -36,6 +36,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
   const [hoverDate, setHoverDate] = useState<{ date: string; count: number } | null>(null);
   const [selectedChartPos, setSelectedChartPos] = useState<PortfolioPosition | null>(null);
   const [showAllHoldings, setShowAllHoldings] = useState(false);
+  const [includeDividends, setIncludeDividends] = useState(true); // Default to include dividends
 
   if (positions.length === 0 && transactions.length === 0) {
     return (
@@ -127,13 +128,42 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
 
   // --- Tab 2: Performance Logic ---
   const performanceData = useMemo(() => {
-    const sortedByPL = [...positions].sort((a, b) => b.unrealizedPL - a.unrealizedPL);
-    const topWinners = sortedByPL.slice(0, 3).filter(p => p.unrealizedPL > 0);
-    const topLosers = [...sortedByPL].reverse().slice(0, 3).filter(p => p.unrealizedPL < 0);
+    // Determine Metric based on Include Dividends Toggle
+    const getMetric = (pos: PortfolioPosition) => {
+        return includeDividends 
+            ? pos.unrealizedPL + pos.totalDividend // 含息損益
+            : pos.unrealizedPL; // 帳面損益
+    };
 
-    const totalNetPL = summary.totalPL + summary.totalRealizedPL;
-    const totalNetPLPercent = summary.totalCost > 0 ? (totalNetPL / summary.totalCost) * 100 : 0;
+    const getMetricPercent = (pos: PortfolioPosition) => {
+        const val = getMetric(pos);
+        return pos.totalCost > 0 ? (val / pos.totalCost) * 100 : 0;
+    };
 
+    const sortedByPL = [...positions].sort((a, b) => getMetric(b) - getMetric(a));
+    const topWinners = sortedByPL.slice(0, 3).filter(p => getMetric(p) > 0);
+    const topLosers = [...sortedByPL].reverse().slice(0, 3).filter(p => getMetric(p) < 0);
+
+    // Calculate Totals based on Toggle
+    let totalDisplayedPL = 0;
+    
+    if (includeDividends) {
+        // totalPL (Unrealized) + totalRealizedPL (which includes dividends and sell gains)
+        totalDisplayedPL = summary.totalPL + summary.totalRealizedPL;
+    } else {
+        // Exclude dividends from realized PL
+        // We need to calculate total dividends from transactions to exclude them
+        const allDividends = transactions
+            .filter(t => t.type === 'DIVIDEND')
+            .reduce((sum, t) => sum + (t as ProcessedTransaction).totalAmount, 0);
+        
+        // Total PL without Dividends = Unrealized + (Realized - Dividends)
+        totalDisplayedPL = summary.totalPL + (summary.totalRealizedPL - allDividends);
+    }
+
+    const totalNetPLPercent = summary.totalCost > 0 ? (totalDisplayedPL / summary.totalCost) * 100 : 0;
+
+    // Annualized Return logic adjusted
     let annualizedReturn = 0;
     let daysDiff = 0;
     if (transactions.length > 0) {
@@ -143,7 +173,9 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       daysDiff = Math.ceil((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysDiff > 0 && summary.totalCost > 0) {
-        const effectiveFinalValue = summary.totalAssets + summary.totalRealizedPL;
+        // Effective Final Value for ROI calc
+        // Cost + Total Displayed PL (which varies by toggle)
+        const effectiveFinalValue = summary.totalCost + totalDisplayedPL;
         const totalMultiplier = effectiveFinalValue / summary.totalCost;
         if (totalMultiplier > 0) {
              annualizedReturn = (Math.pow(totalMultiplier, 365 / daysDiff) - 1) * 100;
@@ -151,17 +183,21 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       }
     }
     
-    const maxAbsPL = Math.max(...positions.map(p => Math.abs(p.unrealizedPL))) || 1;
+    const maxAbsPL = Math.max(...positions.map(p => Math.abs(getMetric(p)))) || 1;
     const power = 0.6;
     const transformedMax = Math.pow(maxAbsPL, power);
 
     const chartItems = sortedByPL.map(pos => {
-        const absVal = Math.abs(pos.unrealizedPL);
+        const val = getMetric(pos);
+        const percent = getMetricPercent(pos);
+        const absVal = Math.abs(val);
         const transformedVal = Math.pow(absVal, power);
         const widthPercent = (transformedVal / transformedMax) * 50; 
         
         return {
             ...pos,
+            displayPL: val,
+            displayPercent: percent,
             widthPercent: Math.max(1, widthPercent) 
         };
     });
@@ -173,18 +209,21 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
         topLosers, 
         annualizedReturn, 
         daysDiff, 
-        totalNetPL, 
+        totalDisplayedPL, 
         totalNetPLPercent,
+        getMetric // Expose helper
     };
-  }, [positions, transactions, summary]);
+  }, [positions, transactions, summary, includeDividends]);
 
   // --- Tab 3: Yearly Logic ---
   const yearlyData = useMemo(() => {
-    const stats: Record<string, { realizedPL: number, costBasis: number, buyCount: number, sellCount: number, buyVol: number, sellVol: number }> = {};
+    const stats: Record<string, { realizedPL: number, costBasis: number, buyCount: number, sellCount: number, buyVol: number, sellVol: number, divAmount: number }> = {};
+    
     transactions.forEach(tx => {
         const year = new Date(tx.date).getFullYear().toString();
-        if (!stats[year]) stats[year] = { realizedPL: 0, costBasis: 0, buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0 };
+        if (!stats[year]) stats[year] = { realizedPL: 0, costBasis: 0, buyCount: 0, sellCount: 0, buyVol: 0, sellVol: 0, divAmount: 0 };
         const amount = (tx as ProcessedTransaction).totalAmount;
+        
         if (tx.type === 'SELL') {
             const pTx = tx as ProcessedTransaction;
             const pl = pTx.realizedPL !== undefined ? pTx.realizedPL : 0;
@@ -193,17 +232,23 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
             stats[year].costBasis += costOfSold;
             stats[year].sellCount += 1;
             stats[year].sellVol += amount;
-        } else {
+        } else if (tx.type === 'BUY') {
             stats[year].buyCount += 1;
             stats[year].buyVol += amount;
+        } else if (tx.type === 'DIVIDEND') {
+            stats[year].divAmount += amount;
+            if (includeDividends) {
+                stats[year].realizedPL += amount;
+            }
         }
     });
+
     return Object.entries(stats).map(([year, data]) => ({
         year,
         ...data,
         roi: data.costBasis > 0 ? (data.realizedPL / data.costBasis) * 100 : 0
     })).sort((a, b) => Number(b.year) - Number(a.year));
-  }, [transactions]);
+  }, [transactions, includeDividends]);
 
   // --- Tab 4: Behavior Logic ---
   const heatmapRows = useMemo(() => {
@@ -308,6 +353,21 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       ? allocationData.sortedByWeight 
       : allocationData.sortedByWeight.slice(0, 5); 
   const hiddenCount = allocationData.sortedByWeight.length - 5;
+
+  // --- TOGGLE SWITCH COMPONENT ---
+  const DividendToggle = () => (
+    <div 
+      className="flex items-center gap-3 bg-slate-800/50 p-1.5 pr-4 rounded-full border border-slate-700/50 cursor-pointer hover:bg-slate-800 transition-colors group select-none active:scale-95" 
+      onClick={() => setIncludeDividends(!includeDividends)}
+    >
+        <div className={`w-10 h-6 rounded-full p-1 transition-colors duration-300 ease-in-out ${includeDividends ? 'bg-yellow-500' : 'bg-slate-600 group-hover:bg-slate-500'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-300 ease-in-out ${includeDividends ? 'translate-x-4' : 'translate-x-0'}`} />
+        </div>
+        <span className={`text-xs font-bold transition-colors ${includeDividends ? 'text-yellow-500' : 'text-slate-400'}`}>
+            {includeDividends ? '已含配息' : '不含配息'}
+        </span>
+    </div>
+  );
 
   return (
     <div className="p-3 pb-24 space-y-4 animate-fade-in">
@@ -487,18 +547,22 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       {/* --- PERFORMANCE --- */}
       {activeSubTab === AnalysisTab.PERFORMANCE && (
         <div className="space-y-4 animate-slide-up">
+            <div className="flex justify-end">
+                <DividendToggle />
+            </div>
+
             <section className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 rounded-2xl border border-slate-700 shadow-xl">
                 <h3 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Award size={12} className="text-amber-400" /> 核心績效指標
+                    <Award size={12} className="text-amber-400" /> 核心績效指標 {includeDividends ? '(含息)' : '(不含息)'}
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                     <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                        <div className="text-[9px] text-slate-500 mb-1 font-light">總投報 (含已實現)</div>
+                        <div className="text-[9px] text-slate-500 mb-1 font-light">總投報率</div>
                         <div className={`text-xl font-bold tabular-nums ${getColor(performanceData.totalNetPLPercent)}`}>
                             {performanceData.totalNetPLPercent > 0 ? '+' : ''}{performanceData.totalNetPLPercent.toFixed(2)}%
                         </div>
-                        <div className={`text-[9px] font-medium mt-0.5 tabular-nums ${getColor(performanceData.totalNetPL)} opacity-80`}>
-                            {performanceData.totalNetPL > 0 ? '+' : ''}${Math.round(performanceData.totalNetPL).toLocaleString()}
+                        <div className={`text-[9px] font-medium mt-0.5 tabular-nums ${getColor(performanceData.totalDisplayedPL)} opacity-80`}>
+                            {performanceData.totalDisplayedPL > 0 ? '+' : ''}${Math.round(performanceData.totalDisplayedPL).toLocaleString()}
                         </div>
                     </div>
                     <div className="bg-black/20 p-3 rounded-xl border border-white/5 relative overflow-hidden">
@@ -530,7 +594,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         performanceData.topWinners.map(p => (
                             <div key={p.symbol} className="flex justify-between items-center mb-1">
                                 <span className="text-[11px] text-white truncate w-16 font-medium">{p.name}</span>
-                                <span className="text-[11px] font-bold text-twRed tabular-nums">+{Math.round(p.unrealizedPL).toLocaleString()}</span>
+                                <span className="text-[11px] font-bold text-twRed tabular-nums">+{Math.round(performanceData.getMetric(p)).toLocaleString()}</span>
                             </div>
                         ))
                     ) : <div className="text-[9px] text-slate-600 italic">無帳面獲利</div>}
@@ -543,7 +607,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                         performanceData.topLosers.map(p => (
                             <div key={p.symbol} className="flex justify-between items-center mb-1">
                                 <span className="text-[11px] text-white truncate w-16 font-medium">{p.name}</span>
-                                <span className="text-[11px] font-bold text-twGreen tabular-nums">-{Math.abs(Math.round(p.unrealizedPL)).toLocaleString()}</span>
+                                <span className="text-[11px] font-bold text-twGreen tabular-nums">-{Math.abs(Math.round(performanceData.getMetric(p))).toLocaleString()}</span>
                             </div>
                         ))
                     ) : <div className="text-[9px] text-slate-600 italic">無帳面虧損</div>}
@@ -554,7 +618,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
             <section className="bg-cardBg p-4 rounded-2xl border border-slate-700 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                        <BarChart3 size={14} className="text-purple-400" /> 未實現損益排行
+                        <BarChart3 size={14} className="text-purple-400" /> 個股損益排行 {includeDividends ? '(含息)' : ''}
                     </h3>
                     <div className="text-[9px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 flex items-center gap-1">
                          <Info size={10} /> 縮放視圖
@@ -564,6 +628,9 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 {/* Detail Overlay Card */}
                 {performanceData.chartItems.length > 0 && (() => {
                     const displayPos = selectedChartPos || performanceData.chartItems[0];
+                    // Need to find the correct chart item to get display values if selectedPos is just raw position
+                    const chartItem = performanceData.chartItems.find(c => c.symbol === displayPos.symbol) || performanceData.chartItems[0];
+                    
                     return (
                         <div className="mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex justify-between items-center animate-fade-in">
                             <div className="flex flex-col">
@@ -574,13 +641,18 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                 <div className="text-[9px] text-slate-400 tabular-nums font-light">
                                     {displayPos.shares.toLocaleString()} 股 • 成本 ${displayPos.avgCost.toFixed(1)}
                                 </div>
+                                {includeDividends && displayPos.totalDividend > 0 && (
+                                    <div className="text-[9px] text-yellow-500/80 tabular-nums font-medium mt-0.5">
+                                        含股利: +${formatCurrency(displayPos.totalDividend)}
+                                    </div>
+                                )}
                             </div>
                             <div className="text-right">
-                                <div className={`text-base font-bold tabular-nums tracking-tight ${getColor(displayPos.unrealizedPL)}`}>
-                                    {displayPos.unrealizedPL > 0 ? '+' : ''}{Math.round(displayPos.unrealizedPL).toLocaleString()}
+                                <div className={`text-base font-bold tabular-nums tracking-tight ${getColor(chartItem.displayPL)}`}>
+                                    {chartItem.displayPL > 0 ? '+' : ''}{Math.round(chartItem.displayPL).toLocaleString()}
                                 </div>
-                                <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block tabular-nums ${getBgColor(displayPos.unrealizedPL)} ${getColor(displayPos.unrealizedPL)}`}>
-                                    {displayPos.unrealizedPLPercent.toFixed(2)}%
+                                <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full inline-block tabular-nums ${getBgColor(chartItem.displayPL)} ${getColor(chartItem.displayPL)}`}>
+                                    {chartItem.displayPercent.toFixed(2)}%
                                 </div>
                             </div>
                         </div>
@@ -591,7 +663,7 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                 {performanceData.chartItems.length > 0 ? (
                     <div className="space-y-3">
                         {performanceData.chartItems.map(pos => {
-                            const isProfit = pos.unrealizedPL >= 0;
+                            const isProfit = pos.displayPL >= 0;
                             const isSelected = selectedChartPos?.symbol === pos.symbol;
                             
                             return (
@@ -603,13 +675,14 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                     <div className="flex justify-between items-end mb-1 px-1">
                                         <div className="flex items-center gap-2">
                                             <span className="text-[11px] font-semibold text-slate-300 w-16 truncate">{pos.name}</span>
+                                            {includeDividends && pos.totalDividend > 0 && <Coins size={8} className="text-yellow-500 opacity-70" />}
                                         </div>
                                         <div className="text-right flex items-center justify-end gap-2">
-                                            <span className={`text-[9px] font-medium opacity-70 tabular-nums ${getColor(pos.unrealizedPL)}`}>
-                                                {pos.unrealizedPLPercent > 0 ? '+' : ''}{pos.unrealizedPLPercent.toFixed(2)}%
+                                            <span className={`text-[9px] font-medium opacity-70 tabular-nums ${getColor(pos.displayPL)}`}>
+                                                {pos.displayPercent > 0 ? '+' : ''}{pos.displayPercent.toFixed(2)}%
                                             </span>
-                                            <span className={`text-[11px] font-bold tabular-nums ${getColor(pos.unrealizedPL)}`}>
-                                                {isProfit ? '+' : ''}{Math.round(pos.unrealizedPL).toLocaleString()}
+                                            <span className={`text-[11px] font-bold tabular-nums ${getColor(pos.displayPL)}`}>
+                                                {isProfit ? '+' : ''}{Math.round(pos.displayPL).toLocaleString()}
                                             </span>
                                         </div>
                                     </div>
@@ -641,14 +714,18 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
       {/* --- YEARLY --- */}
       {activeSubTab === AnalysisTab.YEARLY && (
         <div className="space-y-4 animate-slide-up">
+            <div className="flex justify-between items-center">
+                 <div className="text-[9px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700 flex items-center gap-1">
+                    <Info size={10} /> 僅計入已實現與股利
+                </div>
+                <DividendToggle />
+            </div>
+           
             <section className="bg-cardBg p-4 rounded-2xl border border-slate-700">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xs font-bold text-white flex items-center gap-2">
                         <CalendarRange size={14} className="text-blue-400" /> 年度已實現績效
                     </h3>
-                    <div className="text-[9px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700 flex items-center gap-1">
-                        <Info size={10} /> 僅計入已賣出部位
-                    </div>
                 </div>
                 {yearlyData.length > 0 ? (
                     <div className="space-y-4">
@@ -674,13 +751,13 @@ const PortfolioAnalysis: React.FC<Props> = ({ positions, summary, transactions }
                                             <span className="text-sm font-bold text-slate-200 tabular-nums">{y.year}</span>
                                             {y.sellCount > 0 ? (
                                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums ${y.realizedPL >= 0 ? 'bg-twRed/10 text-twRed' : 'bg-twGreen/10 text-twGreen'}`}>{y.realizedPL > 0 ? '+' : ''}{y.roi.toFixed(1)}%</span>
-                                            ) : <span className="text-[9px] text-slate-500 italic">無賣出交易</span>}
+                                            ) : <span className="text-[9px] text-slate-500 italic">無賣出</span>}
                                         </div>
                                         <span className={`text-xs font-bold tabular-nums ${getColor(y.realizedPL)}`}>{y.realizedPL > 0 ? '+' : ''}${Math.round(y.realizedPL).toLocaleString()}</span>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-500">
                                         <div className="flex justify-between bg-slate-900/30 px-2 py-0.5 rounded"><span>賣出成本</span><span className="tabular-nums font-medium">${Math.round(y.costBasis).toLocaleString()}</span></div>
-                                        <div className="flex justify-between bg-slate-900/30 px-2 py-0.5 rounded"><span>交易量</span><span className="tabular-nums font-medium">${Math.round(y.buyVol + y.sellVol).toLocaleString()}</span></div>
+                                        <div className="flex justify-between bg-slate-900/30 px-2 py-0.5 rounded"><span>現金股利</span><span className={`tabular-nums font-medium ${y.divAmount > 0 ? 'text-yellow-500' : ''}`}>${Math.round(y.divAmount).toLocaleString()}</span></div>
                                     </div>
                                 </div>
                             ))}

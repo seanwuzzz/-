@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { PortfolioSummary, PortfolioPosition } from '../types';
-import { TrendingUp, TrendingDown, Briefcase, ChevronRight, Loader2, Minus, Eye, EyeOff, Share2, X, Copy, Check, Trophy, Camera } from 'lucide-react';
+import { TrendingUp, TrendingDown, Briefcase, ChevronRight, Loader2, Minus, Eye, EyeOff, Share2, X, Copy, Check, Trophy, Camera, Wallet } from 'lucide-react';
 
 interface Props {
   summary: PortfolioSummary;
@@ -172,6 +172,28 @@ const Dashboard: React.FC<Props> = ({ summary, positions, onStockClick, isMarket
                             <>{summary.dayRealizedPL > 0 ? '+' : ''}{Math.round(summary.dayRealizedPL).toLocaleString()}</>
                         )}
                      </div>
+                </div>
+            </div>
+
+            {/* Row 3: T+2 Settlement (New Feature) */}
+            <div className={`bg-black/20 p-2 rounded-xl border border-white/5 flex items-center justify-between px-3 ${summary.daySettlementAmount > 0 ? 'bg-orange-500/5 border-orange-500/10' : (summary.daySettlementAmount < 0 ? 'bg-emerald-500/5 border-emerald-500/10' : '')}`}>
+                <div className="flex items-center gap-1.5">
+                    <Wallet size={12} className="text-slate-400" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">今日交割試算 (T+2)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    {summary.daySettlementAmount !== 0 ? (
+                        <>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${summary.daySettlementAmount > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                {summary.daySettlementAmount > 0 ? '需補款' : '預計入帳'}
+                            </span>
+                            <span className={`text-sm font-bold tabular-nums tracking-tight ${summary.daySettlementAmount > 0 ? 'text-orange-300' : 'text-emerald-300'}`}>
+                                {renderValue(Math.abs(Math.round(summary.daySettlementAmount)).toLocaleString())}
+                            </span>
+                        </>
+                    ) : (
+                        <span className="text-xs font-bold text-slate-500">無</span>
+                    )}
                 </div>
             </div>
           </div>

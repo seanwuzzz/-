@@ -23,11 +23,18 @@ export const calculatePortfolio = (
   const buyQueues = new Map<string, BuyLot[]>(); // FIFO Queue for each stock
   const closedTrades: ClosedTrade[] = [];
   
+  // --- 日期邏輯更新 ---
+  // 定義 "Reporting Date"：若當前時間 < 08:30，則視為 "昨日" (交易日尚未切換)
   const now = new Date();
+  // 檢查是否早於 08:30
+  if (now.getHours() < 8 || (now.getHours() === 8 && now.getMinutes() < 30)) {
+    now.setDate(now.getDate() - 1);
+  }
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   let totalRealizedPL = 0;
   let totalDayRealizedPL = 0;
+  let daySettlementAmount = 0; // 今日交割金額試算
 
   const processedTransactions: ProcessedTransaction[] = [];
 
@@ -50,21 +57,40 @@ export const calculatePortfolio = (
       dayChangePercent: 0,
       dayChangeAmount: 0,
       realizedPL: 0,
+      totalDividend: 0,
       sector: '未分類',
       beta: 1
     };
 
     if (tx.name) current.name = tx.name;
 
-    const netTransactionAmount = tx.type === 'BUY' 
-      ? (tx.shares * tx.price) + tx.fee
-      : (tx.shares * tx.price) - tx.fee;
+    // 計算交易淨額
+    let netTransactionAmount = 0;
+    
+    if (tx.type === 'BUY') {
+        netTransactionAmount = (tx.shares * tx.price) + tx.fee;
+    } else if (tx.type === 'SELL') {
+        netTransactionAmount = (tx.shares * tx.price) - tx.fee;
+    } else if (tx.type === 'DIVIDEND') {
+        netTransactionAmount = (tx.shares * tx.price) - tx.fee; // 股利收入 = (股數 * 配息) - 匯費
+    }
 
     const processedTx: ProcessedTransaction = { 
       ...tx, 
       totalAmount: netTransactionAmount,
-      notes: tx.notes // Pass notes
+      notes: tx.notes
     };
+
+    // 計算今日資金流向 (買進=流出, 賣出=流入)
+    // 修正: 股利不計入 T+2 交割試算，因為通常是現金直接入帳，不影響交割款
+    if (tx.date === todayStr) {
+        if (tx.type === 'BUY') {
+            daySettlementAmount += netTransactionAmount;
+        } else if (tx.type === 'SELL') {
+            // SELL 資金流入 (負數代表流入)
+            daySettlementAmount -= netTransactionAmount;
+        }
+    }
 
     // 初始化 Buy Queue
     if (!buyQueues.has(symbol)) {
@@ -84,6 +110,19 @@ export const calculatePortfolio = (
           fee: tx.fee,
           initialShares: tx.shares
       });
+
+    } else if (tx.type === 'DIVIDEND') {
+        // 股利邏輯：不影響持股數與平均成本，直接計入已實現損益
+        current.realizedPL += netTransactionAmount;
+        current.totalDividend += netTransactionAmount;
+        totalRealizedPL += netTransactionAmount;
+        
+        // 股利交易也視為一種 "已實現損益"
+        processedTx.realizedPL = netTransactionAmount;
+
+        if (tx.date === todayStr) {
+            totalDayRealizedPL += netTransactionAmount;
+        }
 
     } else {
       // SELL 邏輯 (FIFO)
@@ -162,7 +201,7 @@ export const calculatePortfolio = (
                 realizedPL: tradePL,
                 roi: roi,
                 holdDays: Math.max(0, holdDays),
-                notes: tx.notes // 傳遞賣出交易的心得
+                notes: tx.notes
             });
         }
       }
@@ -187,6 +226,7 @@ export const calculatePortfolio = (
     totalRealizedPL: totalRealizedPL,
     dayPL: 0,
     dayRealizedPL: totalDayRealizedPL, 
+    daySettlementAmount: daySettlementAmount,
     portfolioBeta: 0
   };
 
@@ -201,6 +241,8 @@ export const calculatePortfolio = (
     }
     pos.beta = beta;
 
+    // 只要有持股，或者雖然股數為0但有已實現損益(含股利)，都可能需要顯示 (視需求而定，目前邏輯是只顯示持倉)
+    // 但因為計算 Summary 需要包含所有實現損益，所以已經在 totalRealizedPL 處理了
     if (pos.shares > 0) {
       pos.currentPrice = currentPrice;
       pos.currentValue = pos.shares * currentPrice;
@@ -217,6 +259,10 @@ export const calculatePortfolio = (
       queue.forEach(lot => {
           if (lot.shares > 0) {
               if (lot.date === todayStr) {
+                  // 如果交易日期也是 todayStr (08:30前算昨日)，這裡就會正確對應
+                  // 但注意: StockPrice 的 changePercent 通常是交易所的 "昨日收盤價" vs "目前價"
+                  // 如果是 08:30 前，交易所尚未開盤，changePercent 可能是 0 或昨日的漲跌
+                  // 這裡保持原本邏輯，主要依賴 stockPrice API 的回傳
                   dayChangeAmount += (currentPrice - lot.price) * lot.shares;
               } else {
                   dayChangeAmount += (currentPrice - prevClose) * lot.shares;
