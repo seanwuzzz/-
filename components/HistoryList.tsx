@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ProcessedTransaction, StockNews, ClosedTrade, Transaction, StockPrice } from '../types';
 import { 
@@ -416,20 +415,26 @@ const HistoryList: React.FC<Props> = ({
                                         </span>
                                     </div>
                                     
-                                    <div className="tabular-nums font-bold">
-                                         {isDividend ? (
-                                            <span className="text-yellow-500/80">匯費: ${tx.fee}</span>
-                                         ) : tx.realizedPL !== undefined ? (
-                                            <span className={getColor(tx.realizedPL)}>
-                                                {tx.realizedPL > 0 ? '+' : ''}{formatCurrency(tx.realizedPL)}
-                                            </span>
-                                        ) : liveSnapshot ? (
-                                            <span className={getColor(liveSnapshot.unrealized)}>
-                                                {liveSnapshot.unrealized > 0 ? '+' : ''}{formatCurrency(liveSnapshot.unrealized)}
-                                            </span>
-                                        ) : (
-                                            <span className="text-slate-500">費: ${tx.fee}</span>
-                                        )}
+                                    <div className="flex flex-col items-end gap-0.5">
+                                         {/* Show P/L if exists (Realized or Unrealized) */}
+                                         {!isDividend && (
+                                            <div className="tabular-nums font-bold">
+                                                {tx.realizedPL !== undefined ? (
+                                                    <span className={getColor(tx.realizedPL)}>
+                                                        {tx.realizedPL > 0 ? '+' : ''}{formatCurrency(tx.realizedPL)}
+                                                    </span>
+                                                ) : liveSnapshot ? (
+                                                    <span className={getColor(liveSnapshot.unrealized)}>
+                                                        {liveSnapshot.unrealized > 0 ? '+' : ''}{formatCurrency(liveSnapshot.unrealized)}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                         )}
+                                         
+                                         {/* Always show Fee */}
+                                         <span className="text-[9px] text-slate-500 font-medium tabular-nums bg-slate-800/50 px-1.5 rounded text-slate-400">
+                                            {isDividend ? '匯費' : '手續費'}: ${tx.fee}
+                                         </span>
                                     </div>
                                 </div>
 
